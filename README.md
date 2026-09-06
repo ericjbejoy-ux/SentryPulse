@@ -1,4 +1,4 @@
-# AURA: AI-Driven Adaptive Network Digital Twin
+# AURA: AI-Driven Adaptive Network Digital-Twin
 
 > **Real-time infrastructure resilience engine combining dynamic predictive attack simulation with multi-objective configuration optimization.**
 
