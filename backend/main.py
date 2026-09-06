@@ -40,7 +40,7 @@ async def telemetry_stream(websocket: WebSocket):
 
                 if incident:
                     print("[WS] Broadcasting incident alert...")
-                    await manager.broadcast_state("incident_alert", incident.model_dump())
+                    await manager.broadcast_state("incident_alert", incident.model_dump(mode='json'))
 
                     print("[WS] Querying Groq AI agent...")
                     ai_diagnosis = await log_agent.analyze_incident(incident)
