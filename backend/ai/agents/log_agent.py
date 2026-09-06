@@ -6,12 +6,16 @@ from backend.models.incident import IncidentEvent
 
 class LogAgent:
     def __init__(self):
-        self.model = "llama-3.3-70b-versatile"
+        # Switching to Groq's openai/gpt-oss-20b production model
+        self.model = "openai/gpt-oss-20b"
 
     async def analyze_incident(self, incident: IncidentEvent) -> Dict[str, Any]:
         """Analyzes raw logs to determine root cause and immediate mitigation."""
         if not groq_client:
-            return {"error": "Groq client not initialized. Check .env API key."}
+            return {
+                "root_cause": "Groq client not initialized. Check your .env API key.",
+                "recommended_action": "Verify GROQ_API_KEY environment variable."
+            }
 
         prompt = f"""
         You are an autonomous site reliability engineer. Analyze this network incident:
@@ -37,9 +41,13 @@ class LogAgent:
             response = await asyncio.to_thread(_call_groq)
             content = response.choices[0].message.content
             if not content:
-                return {"error": "Received empty response from Groq LLM."}
+                return {"root_cause": "Empty LLM response", "recommended_action": "Check service logs."}
             return json.loads(content)
         except Exception as e:
-            return {"error": f"Log analysis failed: {str(e)}"}
+            # Graceful fallback so the WebSocket pipeline never crashes
+            return {
+                "root_cause": f"AI analysis unavailable: {str(e)}",
+                "recommended_action": "Isolate affected nodes manually via dashboard override."
+            }
 
 log_agent = LogAgent()
