@@ -1,9 +1,45 @@
 @import "tailwindcss";
 
+:root {
+  --bg-main: #0B0D10;
+  --bg-panel: #14171D;
+  --border-color: #282D37;
+  --text-main: #EDEFEF;
+  --text-muted: #8B949E;
+  --canvas-grid: #1C212B;
+  --accent-green: #00B36B;
+}
+
+.light-mode {
+  --bg-main: #E6E8EC;
+  --bg-panel: #FFFFFF;
+  --border-color: #CBD5E1;
+  --text-main: #0F172A;
+  --text-muted: #64748B;
+  --canvas-grid: #D1D5DB;
+  --accent-green: #059669; /* Deep Emerald for readable contrast in light mode */
+}
+
 body {
   margin: 0;
-  background-color: #0B0D10;
-  color: #EDEFEF;
+  background-color: var(--bg-main);
+  color: var(--text-main);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
   overflow: hidden;
-}   
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Radar Sweep Animation behind Canvas */
+@keyframes radar-sweep {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.radar-sweep {
+  animation: radar-sweep 10s linear infinite;
+  transform-origin: center;
+}
