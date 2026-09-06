@@ -1,0 +1,24 @@
+[project]
+name = "agy-minimal"
+version = "0.1.0"
+description = "Minimal AGY flow example"
+requires-python = ">=3.11"
+dependencies = ["agy>=1.0.0"]
+
+[tool.agy.llm]
+default_provider = "openai"
+default_model = "gpt-5-mini"
+default_params = {}
+
+[providers.openai]
+api_key_env = "OPENAI_API_KEY"
+
+[providers.openai_azure]
+api_key_env = "AZURE_OPENAI_API_KEY"
+endpoint_env = "AZURE_OPENAI_ENDPOINT"
+
+[providers.gemini]
+api_key_env = "GEMINI_API_KEY"
+
+[providers.anthropic]
+api_key_env = "ANTHROPIC_API_KEY"

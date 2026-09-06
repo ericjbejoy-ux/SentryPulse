@@ -1,0 +1,16 @@
+name: Example Flow
+description: A simple example flow demonstrating AGY basics
+context_in:
+  context: ExampleContext
+
+nodes:
+  - start:
+      actions:
+        - context.log("Starting flow execution")
+        - result = classify(
+            input_text=context.text,
+            categories=["positive", "negative", "neutral"],
+            instruction_file="prompts/example_instruction.md"
+          )
+        - context.log("Classification complete")
+        - show("Category:", category, "Confidence:", confidence)
