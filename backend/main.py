@@ -20,6 +20,7 @@ async def health_check():
 async def telemetry_stream(websocket: WebSocket):
     """WebSocket endpoint for the React Flow spatial canvas."""
     await manager.connect(websocket)
+    print("[WS] Client connected successfully!")
 
     # Send the initial graph state upon connection
     initial_state = await digital_twin.get_topology_state()
@@ -27,25 +28,30 @@ async def telemetry_stream(websocket: WebSocket):
 
     try:
         while True:
-            # Keep connection alive and listen for frontend commands
+            # Wait for text from the frontend/wscat
             data = await websocket.receive_text()
+            print(f"[WS] Received text from client: '{data}'")
 
-            if data == "simulate_failure":
-                # Simulate a structured log that matches the updated regex
+            if data.strip() == "simulate_failure":
+                print("[WS] Triggering failure simulation...")
                 log = '[2026-09-06T19:01:13Z] CRITICAL node_id=primary_db Metrics:{"cpu_load": 99, "memory_usage": "OOM"}'
 
-                # Process log and update the digital twin state asynchronously
                 incident = await log_parser.parse_and_process(log)
 
                 if incident:
-                    # Broadcast the raw incident to the frontend immediately
+                    print("[WS] Broadcasting incident alert...")
                     await manager.broadcast_state("incident_alert", incident.model_dump())
 
-                    # Trigger the AI Swarm to analyze the incident via Groq
+                    print("[WS] Querying Groq AI agent...")
                     ai_diagnosis = await log_agent.analyze_incident(incident)
 
-                    # Broadcast the AI's diagnosis back to the war room dashboard
+                    print(f"[WS] Broadcasting AI diagnosis: {ai_diagnosis}")
                     await manager.broadcast_state("ai_diagnosis", ai_diagnosis)
+                else:
+                    print("[WS] Error: Log parser did not return an incident!")
+            else:
+                print(f"[WS] Unrecognized command received: '{data}'")
 
     except WebSocketDisconnect:
-        manager.disconnect(websocket)
+        print("[WS] Client disconnected.")
+        await manager.disconnect(websocket)
