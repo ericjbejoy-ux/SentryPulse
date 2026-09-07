@@ -7,7 +7,6 @@ import SwarmFeed from './components/SwarmFeed';
 import ParetoChart from './components/ParetoChart';
 import { Shield, Activity, Cpu, Zap, RotateCcw, Sun, Moon, Sliders, Terminal, LayoutGrid, Radio } from 'lucide-react';
 
-// API Endpoint for FastAPI NetworkX backend
 const API_BASE_URL = 'http://localhost:8000/api/v1';
 
 export default function App() {
@@ -20,10 +19,8 @@ export default function App() {
   const [isConnectedToBackend, setIsConnectedToBackend] = useState(false);
   const [activeTab, setActiveTab] = useState<'pareto' | 'feed'>('pareto');
   const [rps, setRps] = useState(12800);
+  const [selectedFault, setSelectedFault] = useState('db_lock');
 
-  const themeAccent = isLight ? '#047857' : '#10B981';
-
-  // Toggle light mode CSS class
   useEffect(() => {
     if (isLight) {
       document.body.classList.add('light-mode');
@@ -32,7 +29,6 @@ export default function App() {
     }
   }, [isLight]);
 
-  // Transform backend graph payload into React Flow Node/Edge objects
   const formatTopologyPayload = useCallback((rawNodes: any[], rawEdges: any[], lightMode: boolean) => {
     const formattedNodes: Node[] = rawNodes.map((node) => ({
       id: node.id,
@@ -77,7 +73,132 @@ export default function App() {
     return { formattedNodes, formattedEdges };
   }, []);
 
-  // Fetch Live Topology Graph from FastAPI
+  const generateFallbackDynamicGraph = useCallback(() => {
+    let rawNodes = [];
+    let rawEdges = [];
+
+    if (isResolved) {
+      rawNodes = [
+        { id: '1', label: 'storefront-ui', status: 'NOMINAL', cpu: '18%', latency: '12ms', load: '0.18', packets: '1.2k', position: { x: 240, y: 30 } },
+        { id: '2', label: 'api-gateway', status: 'NOMINAL', cpu: '24%', latency: '18ms', load: '0.32', packets: '3.4k', position: { x: 240, y: 150 } },
+        { id: '3', label: 'cart-service', status: 'NOMINAL', cpu: '22%', latency: '14ms', load: '0.25', packets: '1.8k', position: { x: 60, y: 270 } },
+        { id: '4', label: 'redis-cache', status: 'NOMINAL', cpu: '12%', latency: '2ms', load: '0.08', packets: '4.1k', position: { x: 420, y: 270 } },
+        { id: '5', label: 'postgres-db (SEC)', status: 'NOMINAL', cpu: '28%', latency: '8ms', load: '0.45', packets: '2.1k', alertMessage: 'FAILOVER COMPLETE', position: { x: 240, y: 390 } },
+      ];
+      rawEdges = [
+        { source: '1', target: '2', status: 'NOMINAL' },
+        { source: '2', target: '3', status: 'NOMINAL' },
+        { source: '2', target: '4', status: 'NOMINAL' },
+        { source: '3', target: '5', status: 'NOMINAL' },
+      ];
+    } else if (isAttacked) {
+      if (selectedFault === 'memory_leak') {
+        rawNodes = [
+          { id: '1', label: 'storefront-ui', status: 'WARNING', cpu: '45%', latency: '210ms', load: '1.80', packets: '4.2k', position: { x: 240, y: 30 } },
+          { id: '2', label: 'api-gateway', status: 'WARNING', cpu: '62%', latency: '480ms', load: '2.90', packets: '8.1k', position: { x: 240, y: 150 } },
+          { id: '3', label: 'cart-service', status: 'CRITICAL', cpu: '100%', latency: 'ERR_503', load: 'ERR', packets: '0', alertMessage: 'OOM KILLED (MEM > 99%)', position: { x: 60, y: 270 } },
+          { id: '4', label: 'redis-cache', status: 'NOMINAL', cpu: '14%', latency: '2ms', load: '0.09', packets: '3.5k', position: { x: 420, y: 270 } },
+          { id: '5', label: 'postgres-primary-db', status: 'NOMINAL', cpu: '18%', latency: '5ms', load: '0.22', packets: '420', position: { x: 240, y: 390 } },
+        ];
+        rawEdges = [
+          { source: '1', target: '2', status: 'WARNING' },
+          { source: '2', target: '3', status: 'CRITICAL', animated: true },
+          { source: '2', target: '4', status: 'NOMINAL' },
+          { source: '3', target: '5', status: 'NOMINAL' },
+        ];
+      } else if (selectedFault === 'cache_stampede') {
+        rawNodes = [
+          { id: '1', label: 'storefront-ui', status: 'WARNING', cpu: '68%', latency: '140ms', load: '2.40', packets: '8.8k', position: { x: 240, y: 30 } },
+          { id: '2', label: 'api-gateway', status: 'WARNING', cpu: '74%', latency: '290ms', load: '4.10', packets: '16.2k', position: { x: 240, y: 150 } },
+          { id: '3', label: 'cart-service', status: 'WARNING', cpu: '82%', latency: '380ms', load: '3.80', packets: '14.1k', position: { x: 60, y: 270 } },
+          { id: '4', label: 'redis-cache', status: 'CRITICAL', cpu: '100%', latency: '990ms', load: '15.2', packets: '89.0k', alertMessage: 'CACHE MISS STORM', position: { x: 420, y: 270 } },
+          { id: '5', label: 'postgres-primary-db', status: 'CRITICAL', cpu: '92%', latency: '1800ms', load: '11.4', packets: '38.0k', alertMessage: 'UNCACHED READ SURGE', position: { x: 240, y: 390 } },
+        ];
+        rawEdges = [
+          { source: '1', target: '2', status: 'WARNING' },
+          { source: '2', target: '3', status: 'WARNING' },
+          { source: '2', target: '4', status: 'CRITICAL', animated: true },
+          { source: '3', target: '5', status: 'CRITICAL', animated: true },
+        ];
+      } else if (selectedFault === 'ddos') {
+        rawNodes = [
+          { id: '1', label: 'storefront-ui', status: 'CRITICAL', cpu: '98%', latency: '3200ms', load: '24.0', packets: '180.0k', alertMessage: 'SYN FLOOD DETECTED', position: { x: 240, y: 30 } },
+          { id: '2', label: 'api-gateway', status: 'CRITICAL', cpu: '99%', latency: '4100ms', load: '31.5', packets: '210.0k', alertMessage: 'BANDWIDTH SATURATION', position: { x: 240, y: 150 } },
+          { id: '3', label: 'cart-service', status: 'WARNING', cpu: '65%', latency: '180ms', load: '2.10', packets: '5.4k', position: { x: 60, y: 270 } },
+          { id: '4', label: 'redis-cache', status: 'NOMINAL', cpu: '18%', latency: '3ms', load: '0.12', packets: '4.2k', position: { x: 420, y: 270 } },
+          { id: '5', label: 'postgres-primary-db', status: 'NOMINAL', cpu: '22%', latency: '7ms', load: '0.30', packets: '1.2k', position: { x: 240, y: 390 } },
+        ];
+        rawEdges = [
+          { source: '1', target: '2', status: 'CRITICAL', animated: true },
+          { source: '2', target: '3', status: 'WARNING' },
+          { source: '2', target: '4', status: 'NOMINAL' },
+          { source: '3', target: '5', status: 'NOMINAL' },
+        ];
+      } else if (selectedFault === 'fintech_payment') {
+        rawNodes = [
+          { id: '1', label: 'checkout-portal', status: 'WARNING', cpu: '64%', latency: '850ms', load: '3.12', packets: '18.4k', position: { x: 240, y: 30 } },
+          { id: '2', label: 'payment-api-gw', status: 'WARNING', cpu: '82%', latency: '1420ms', load: '6.80', packets: '42.1k', position: { x: 240, y: 150 } },
+          { id: '3', label: 'kafka-event-bus', status: 'CRITICAL', cpu: '94%', latency: '4800ms', load: '22.1', packets: '120.0k', alertMessage: 'CONSUMER GROUP LAG > 50K', position: { x: 60, y: 270 } },
+          { id: '4', label: 'fraud-eval-worker', status: 'CRITICAL', cpu: '99%', latency: '3100ms', load: '14.2', packets: '8.5k', alertMessage: 'MODEL INFERENCE DEADLOCK', position: { x: 420, y: 270 } },
+          { id: '5', label: 'cockroach-ledger-db', status: 'WARNING', cpu: '78%', latency: '620ms', load: '4.10', packets: '15.2k', position: { x: 240, y: 390 } },
+        ];
+        rawEdges = [
+          { source: '1', target: '2', status: 'WARNING' },
+          { source: '2', target: '3', status: 'CRITICAL', animated: true },
+          { source: '2', target: '4', status: 'CRITICAL', animated: true },
+          { source: '3', target: '5', status: 'WARNING' },
+        ];
+      } else if (selectedFault === 'llm_cluster') {
+        rawNodes = [
+          { id: '1', label: 'copilot-web-ui', status: 'WARNING', cpu: '58%', latency: '2200ms', load: '2.40', packets: '6.2k', position: { x: 240, y: 30 } },
+          { id: '2', label: 'langchain-orchestrator', status: 'CRITICAL', cpu: '95%', latency: '8900ms', load: '18.4', packets: '24.1k', alertMessage: 'CONTEXT BUFFER OVERFLOW', position: { x: 240, y: 150 } },
+          { id: '3', label: 'qdrant-vector-index', status: 'CRITICAL', cpu: '91%', latency: '3400ms', load: '12.1', packets: '18.9k', alertMessage: 'HNSW GRAPH MEMORY SWAP', position: { x: 60, y: 270 } },
+          { id: '4', label: 'vllm-gpu-node-a100', status: 'CRITICAL', cpu: '100%', latency: '12400ms', load: '45.0', packets: '2.1k', alertMessage: 'CUDA OUT OF MEMORY', position: { x: 420, y: 270 } },
+          { id: '5', label: 'model-weights-s3', status: 'NOMINAL', cpu: '12%', latency: '15ms', load: '0.10', packets: '520', position: { x: 240, y: 390 } },
+        ];
+        rawEdges = [
+          { source: '1', target: '2', status: 'WARNING' },
+          { source: '2', target: '3', status: 'CRITICAL', animated: true },
+          { source: '2', target: '4', status: 'CRITICAL', animated: true },
+          { source: '4', target: '5', status: 'NOMINAL' },
+        ];
+      } else {
+        // Default DB Lock
+        rawNodes = [
+          { id: '1', label: 'storefront-ui', status: 'WARNING', cpu: '78%', latency: '180ms', load: '3.10', packets: '12.4k', position: { x: 240, y: 30 } },
+          { id: '2', label: 'api-gateway', status: 'WARNING', cpu: '85%', latency: '320ms', load: '5.40', packets: '28.1k', position: { x: 240, y: 150 } },
+          { id: '3', label: 'cart-service', status: 'CRITICAL', cpu: '96%', latency: '1200ms', load: '11.2', packets: '18.5k', alertMessage: 'POOL EXHAUSTED', position: { x: 60, y: 270 } },
+          { id: '4', label: 'redis-cache', status: 'NOMINAL', cpu: '22%', latency: '4ms', load: '0.15', packets: '8.2k', position: { x: 420, y: 270 } },
+          { id: '5', label: 'postgres-primary-db', status: 'CRITICAL', cpu: '99%', latency: '4500ms', load: '18.9', packets: '45.0k', alertMessage: 'ROW-LOCK SATURATION', position: { x: 240, y: 390 } },
+        ];
+        rawEdges = [
+          { source: '1', target: '2', status: 'WARNING' },
+          { source: '2', target: '3', status: 'CRITICAL', animated: true },
+          { source: '2', target: '4', status: 'NOMINAL' },
+          { source: '3', target: '5', status: 'CRITICAL', animated: true },
+        ];
+      }
+    } else {
+      rawNodes = [
+        { id: '1', label: 'storefront-ui', status: 'NOMINAL', cpu: '15%', latency: '10ms', load: '0.15', packets: '950', position: { x: 240, y: 30 } },
+        { id: '2', label: 'api-gateway', status: 'NOMINAL', cpu: '22%', latency: '15ms', load: '0.28', packets: '2.2k', position: { x: 240, y: 150 } },
+        { id: '3', label: 'cart-service', status: 'NOMINAL', cpu: '18%', latency: '12ms', load: '0.20', packets: '1.1k', position: { x: 60, y: 270 } },
+        { id: '4', label: 'redis-cache', status: 'NOMINAL', cpu: '10%', latency: '1ms', load: '0.05', packets: '3.8k', position: { x: 420, y: 270 } },
+        { id: '5', label: 'postgres-primary-db', status: 'NOMINAL', cpu: '25%', latency: '6ms', load: '0.38', packets: '1.5k', position: { x: 240, y: 390 } },
+      ];
+      rawEdges = [
+        { source: '1', target: '2', status: 'NOMINAL' },
+        { source: '2', target: '3', status: 'NOMINAL' },
+        { source: '2', target: '4', status: 'NOMINAL' },
+        { source: '3', target: '5', status: 'NOMINAL' },
+      ];
+    }
+
+    const { formattedNodes, formattedEdges } = formatTopologyPayload(rawNodes, rawEdges, isLight);
+    setNodes(formattedNodes);
+    setEdges(formattedEdges);
+  }, [isAttacked, isResolved, selectedFault, isLight, formatTopologyPayload]);
+
   const fetchLiveTopology = useCallback(async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/topology`);
@@ -93,47 +214,10 @@ export default function App() {
       if (data.isResolved !== undefined) setIsResolved(data.isResolved);
     } catch (err) {
       setIsConnectedToBackend(false);
-      // Fallback: Dynamic internal graph state generator if backend is offline
       generateFallbackDynamicGraph();
     }
-  }, [isLight, formatTopologyPayload]);
+  }, [isLight, formatTopologyPayload, generateFallbackDynamicGraph]);
 
-  // Fallback state generator so the UI works seamlessly with or without backend running
-  const generateFallbackDynamicGraph = useCallback(() => {
-    const rawNodes = isResolved
-      ? [
-          { id: '1', label: 'app-server-01', status: 'NOMINAL', cpu: '28%', latency: '3ms', load: '0.35', packets: '420', position: { x: 240, y: 40 } },
-          { id: '2', label: 'db-primary (SEC)', status: 'NOMINAL', cpu: '24%', latency: '6ms', load: '0.41', packets: '980', alertMessage: 'FAILOVER COMPLETE', position: { x: 50, y: 200 } },
-          { id: '3', label: 'edge-gateway', status: 'NOMINAL', cpu: '36%', latency: '11ms', load: '0.88', packets: '1.9k', position: { x: 430, y: 200 } },
-          { id: '4', label: 'cache-cluster', status: 'NOMINAL', cpu: '12%', latency: '1ms', load: '0.10', packets: '720', position: { x: 240, y: 360 } },
-        ]
-      : isAttacked
-      ? [
-          { id: '1', label: 'app-server-01', status: 'WARNING', cpu: '84%', latency: '38ms', load: '3.80', packets: '7.8k', position: { x: 240, y: 40 } },
-          { id: '2', label: 'db-primary', status: 'CRITICAL', cpu: '98%', latency: '310ms', load: '12.8', packets: '38.4k', alertMessage: 'SYN FLOOD DETECTED', position: { x: 50, y: 200 } },
-          { id: '3', label: 'edge-gateway', status: 'WARNING', cpu: '76%', latency: '82ms', load: '3.10', packets: '16.5k', position: { x: 430, y: 200 } },
-          { id: '4', label: 'cache-cluster', status: 'NOMINAL', cpu: '18%', latency: '2ms', load: '0.22', packets: '1.1k', position: { x: 240, y: 360 } },
-        ]
-      : [
-          { id: '1', label: 'app-server-01', status: 'NOMINAL', cpu: '22%', latency: '2ms', load: '0.28', packets: '210', position: { x: 240, y: 40 } },
-          { id: '2', label: 'db-primary', status: 'NOMINAL', cpu: '29%', latency: '5ms', load: '0.38', packets: '1.1k', position: { x: 50, y: 200 } },
-          { id: '3', label: 'edge-gateway', status: 'NOMINAL', cpu: '34%', latency: '12ms', load: '0.78', packets: '1.6k', position: { x: 430, y: 200 } },
-          { id: '4', label: 'cache-cluster', status: 'NOMINAL', cpu: '10%', latency: '1ms', load: '0.08', packets: '650', position: { x: 240, y: 360 } },
-        ];
-
-    const rawEdges = [
-      { source: '1', target: '2', status: isAttacked ? 'CRITICAL' : 'NOMINAL', animated: isAttacked || isResolved },
-      { source: '1', target: '3', status: isAttacked ? 'WARNING' : 'NOMINAL', animated: isAttacked },
-      { source: '2', target: '4', status: 'NOMINAL' },
-      { source: '3', target: '4', status: 'NOMINAL' },
-    ];
-
-    const { formattedNodes, formattedEdges } = formatTopologyPayload(rawNodes, rawEdges, isLight);
-    setNodes(formattedNodes);
-    setEdges(formattedEdges);
-  }, [isAttacked, isResolved, isLight, formatTopologyPayload]);
-
-  // Polling loop for dynamic real-time telemetry updates
   useEffect(() => {
     fetchLiveTopology();
     const interval = setInterval(() => {
@@ -144,12 +228,20 @@ export default function App() {
     return () => clearInterval(interval);
   }, [fetchLiveTopology]);
 
-  // Interactive Trigger Handlers
   const handleTriggerAttack = async () => {
     setIsAttacked(true);
+    setIsResolved(false);
+
+    generateFallbackDynamicGraph();
+
     if (isConnectedToBackend) {
       try {
-        await fetch(`${API_BASE_URL}/simulate/attack`, { method: 'POST' });
+        await fetch(`${API_BASE_URL}/simulate/attack`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fault_type: selectedFault }),
+        });
+        fetchLiveTopology();
       } catch (err) {
         console.error('Failed to dispatch attack event to backend');
       }
@@ -235,6 +327,22 @@ export default function App() {
 
         {/* Action Toolbar */}
         <div className="flex items-center gap-2.5">
+          {/* Fault Selector Dropdown */}
+          {!isAttacked && !isResolved && (
+            <select
+              value={selectedFault}
+              onChange={(e) => setSelectedFault(e.target.value)}
+              className="bg-[#232730] border border-slate-700 text-xs text-slate-200 rounded px-2.5 py-1.5 font-mono focus:outline-none focus:border-red-500 cursor-pointer"
+            >
+              <option value="db_lock">Fault: DB Lock</option>
+              <option value="memory_leak">Fault: OOM Crash</option>
+              <option value="cache_stampede">Fault: Cache Storm</option>
+              <option value="ddos">Fault: Volumetric DDoS</option>
+              <option value="fintech_payment">Fault: Kafka Lag (Fintech)</option>
+              <option value="llm_cluster">Fault: CUDA OOM (AI Cluster)</option>
+            </select>
+          )}
+
           {!isAttacked && !isResolved && (
             <button
               onClick={handleTriggerAttack}
