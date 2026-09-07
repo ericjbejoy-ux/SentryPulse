@@ -1,15 +1,16 @@
-"""
-Pydantic models for the telemetry-engine branch.
-These mirror the JSON shapes in SRS.md section 5.1 and 5.2 exactly,
-so the frontend (Person 3) and swarm engine (Person 2) can rely on
-a stable contract regardless of what happens inside this service.
+"""Unified twin schemas — canonical contract for the single-backend MVP.
+
+Mirrors SRS2 section 5.1 / 5.2 JSON shapes exactly so the frontend,
+swarm engine, and healing webhook share one stable contract.
+Promoted from telemetry-engine/app/schemas.py (Person 1 deliverable).
 """
 from enum import Enum
 from typing import Optional
+
 from pydantic import BaseModel, Field
 
 
-class NodeState(str, Enum):
+class TwinNodeState(str, Enum):
     NOMINAL = "NOMINAL"
     DEGRADED = "DEGRADED"
     CRITICAL = "CRITICAL"
@@ -24,6 +25,7 @@ class TopologyNodeId(str, Enum):
 
 class TelemetrySnapshot(BaseModel):
     """Matches SRS 5.1 GET /api/v1/telemetry/live response body."""
+
     timestamp: str
     latency_ms: float
     cpu: str  # kept as "88%" string form to match the SRS example verbatim
@@ -35,7 +37,7 @@ class TelemetrySnapshot(BaseModel):
 
 class NodeHealth(BaseModel):
     node_id: TopologyNodeId
-    state: NodeState
+    state: TwinNodeState
     anomaly_score: float = Field(ge=0.0, le=1.0)
     latency_ms: float
     cpu_pct: float
@@ -45,12 +47,14 @@ class NodeHealth(BaseModel):
 
 class SimulationRequest(BaseModel):
     """Matches SRS 5.2 POST /api/v1/simulation/start payload."""
+
     permutations: int = Field(default=100_000, le=200_000, gt=0)
     chaos_type: str = "THREADPOOL_LOCK"
 
 
 class SimulationResult(BaseModel):
     """Matches SRS 5.2 POST /api/v1/simulation/start response."""
+
     status: str
     permutations_executed: int
     resilience_score: float

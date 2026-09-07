@@ -1,0 +1,14 @@
+# SentryPulse unified MVP — single backend (backend.main:app) + Vite frontend.
+# Install:  pip install -r requirements.txt
+# (.env is gitignored; copy .env.example -> .env and set GROQ_API_KEY.)
+fastapi>=0.110
+uvicorn[standard]>=0.29
+pydantic>=2.6
+pydantic-settings>=2.0
+httpx>=0.27
+python-dotenv>=1.0.1
+networkx>=3.0
+groq>=0.9.0
+numpy>=1.26
+scikit-learn>=1.4
+sse-starlette>=2.0

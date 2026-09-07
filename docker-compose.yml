@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  sentrypulse-api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - DEMO_FALLBACK_MODE=true
+      # Set your key via shell env or a .env file next to this compose file:
+      # GROQ_API_KEY=${GROQ_API_KEY:-}
+      # N8N_WEBHOOK_URL=http://n8n:5678/webhook-test/sentrypulse-trigger
+    env_file:
+      - .env
+    restart: always
+
+  frontend:
+    image: node:20-slim
+    working_dir: /app
+    volumes:
+      - ./:/app
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=http://localhost:8000
+    command: sh -c "npm ci && npm run dev -- --host 0.0.0.0 --port 5173"
+    depends_on:
+      - sentrypulse-api
+
+  n8n:
+    image: n8nio/n8n:latest
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=localhost
+      - WEBHOOK_URL=http://localhost:5678/
+    restart: always

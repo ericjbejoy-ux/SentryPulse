@@ -1,17 +1,15 @@
-# feature/telemetry-engine — Person 1
+# Telemetry engine — backend/telemetry + backend/ml
 
-Implements FR-1, FR-3, and FR-4 from `SRS.md`: the digital twin state
+Implements FR-1, FR-3, and FR-4 from `docs/SRS.md`: the digital twin state
 engine, the Monte Carlo stochastic simulation, and the Isolation Forest
-anomaly scorer. This is the backend the frontend (`feature/frontend-twin`)
-and the swarm engine (`feature/ai-swarm-engine`) both read from.
+anomaly scorer. This is the backend the frontend and the swarm engine
+both read from (single unified app: `backend/main.py`).
 
 ## Setup
 
 ```bash
-python -m venv venv
-source venv/bin/activate       # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-uvicorn app.main:app --reload --port 8000
+pip install -r requirements.txt          # repo root
+uvicorn backend.main:app --port 8000
 ```
 
 Visit `http://127.0.0.1:8000/docs` for interactive Swagger docs.
@@ -25,23 +23,22 @@ Visit `http://127.0.0.1:8000/docs` for interactive Swagger docs.
 | `/api/v1/simulation/start` | POST | Runs the vectorized 100k-permutation Monte Carlo engine (SRS 5.2) |
 | `/api/v1/telemetry/reset` | POST | Support hook for Person 4 — call after n8n returns 200 OK (FR-7.3) |
 
-## File map
+## File map (all under `backend/`)
 
-- `app/schemas.py` — Pydantic models. This is the actual API contract;
-  keep it in sync with `SRS.md` section 5 if anything changes, since
-  Person 2 and Person 3 build against these shapes.
-- `app/telemetry.py` — `DigitalTwinState`: in-memory node state machine
+- `models/twin_schemas.py` — Pydantic models. This is the actual API contract;
+  keep it in sync with `docs/SRS.md` section 5 if anything changes, since
+  the swarm engine and frontend build against these shapes.
+- `telemetry/state.py` — `DigitalTwinState`: in-memory node state machine
   (NOMINAL/DEGRADED/CRITICAL) and synthetic metric generation. Swap the
   synthetic generator for a real OTel collector adapter later without
   touching `main.py`.
-- `app/anomaly.py` — Isolation Forest scorer (FR-4), bootstrapped on
+- `ml/anomaly.py` — Isolation Forest scorer (FR-4), bootstrapped on
   synthetic nominal traffic so it returns sane scores from the first
   request, and refits periodically as history accumulates.
-- `app/simulation.py` — Fully vectorized (numpy, no per-permutation Python
+- `telemetry/simulation.py` — Fully vectorized (numpy, no per-permutation Python
   loop) Monte Carlo engine. This is what makes NFR-1.2 (100k permutations
   under 3s) achievable — the current build runs in well under 0.1s.
-- `app/main.py` — FastAPI wiring: background polling loop + the three
-  endpoints above.
+- `main.py` — FastAPI wiring: background polling loop + endpoints.
 
 ## Integration notes for the rest of the team
 
@@ -65,8 +62,9 @@ Visit `http://127.0.0.1:8000/docs` for interactive Swagger docs.
 
 ## Measured accuracy & efficiency
 
-See `eval_anomaly_accuracy.py` (run with `python eval_anomaly_accuracy.py`
-after `pip install -r requirements.txt`) for the anomaly-detector numbers
+See `backend/ml/eval_anomaly_accuracy.py` (run with
+`python -m backend.ml.eval_anomaly_accuracy` from the repo root after
+`pip install -r requirements.txt`) for the anomaly-detector numbers
 below. There's no real labeled production data yet, so this evaluates
 against a synthetic test set built from the same nominal/attacked
 distributions `telemetry.py` uses internally — treat these as a sanity
