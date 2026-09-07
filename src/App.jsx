@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Zap, RefreshCw, Terminal, Server, 
   ArrowUpRight, Activity, ShieldCheck, 
-  Radio, AlertTriangle, Layers, CpuIcon, CheckCircle2, GitBranch, Sun, Moon, Network, Move, Sparkles, Wrench, ZoomIn, ZoomOut, RotateCcw
+  Radio, AlertTriangle, Layers, CpuIcon, CheckCircle2, GitBranch, Sun, Moon, Network, Move, Sparkles, Wrench, ZoomIn, ZoomOut, RotateCcw, Download, Save
 } from 'lucide-react';
 
 export default function App() {
@@ -12,21 +12,38 @@ export default function App() {
   const [isSimulating, setIsSimulating] = useState(false);
   const [selectedOption, setSelectedOption] = useState('A');
   const [dynamicFailureReport, setDynamicFailureReport] = useState(null);
+  const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
   
+  // Dynamic Telemetry Metrics State (No longer hardcoded)
+  const [simulationCount, setSimulationCount] = useState(0);
+  const [totalAnomaliesDetected, setTotalAnomaliesDetected] = useState(0);
+  const [failureTypeStats, setFailureTypeStats] = useState({
+    'THREADPOOL_DEADLOCK': 0,
+    'MEMORY_LEAK_SPIKE': 0,
+    'WRITE_LOCK_CONTEST': 0,
+    'BUFFER_SATURATION': 0
+  });
+
   // Canvas zoom & pan state
   const [zoomLevel, setZoomLevel] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const panStartRef = useRef({ x: 0, y: 0 });
+  
+  // Touch / Pinch-to-zoom tracking refs
+  const touchStartDistRef = useRef(null);
+  const touchStartZoomRef = useRef(1);
 
   const canvasRef = useRef(null);
+  const reportRef = useRef(null); // Ref for PDF generation container
   const [draggingNodeId, setDraggingNodeId] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
 
+  // Live Audit Stream Session Logs
   const [logs, setLogs] = useState([
-    { time: '18:45:02', level: 'SYS', msg: 'SentryPulse Topological Engine v2.5.0 online. 100,000 Monte Carlo iterations loaded.' },
-    { time: '18:45:04', level: 'INFO', msg: 'NetworkX Graph loaded: 8 nodes structured in 5 architectural tiers.' },
-    { time: '18:45:05', level: 'AI', msg: 'Groq LLaMA-3.3 multi-agent triaging swarm scanning directed cyclic dependencies.' }
+    { time: new Date().toLocaleTimeString(), level: 'SYS', msg: 'SentryPulse Topological Engine v2.5.0 online. 100,000 Monte Carlo iterations loaded.' },
+    { time: new Date().toLocaleTimeString(), level: 'INFO', msg: 'NetworkX Graph loaded: 8 nodes structured in 5 architectural tiers.' },
+    { time: new Date().toLocaleTimeString(), level: 'AI', msg: 'Groq LLaMA-3.3 multi-agent triaging swarm scanning directed cyclic dependencies.' }
   ]);
 
   const initialNodes = [
@@ -41,6 +58,19 @@ export default function App() {
   ];
 
   const [nodes, setNodes] = useState(initialNodes);
+
+  // Computed Top Failure Vector dynamically extracted from live state counters
+  const getTopFailureVector = () => {
+    const entries = Object.entries(failureTypeStats);
+    if (entries.every(([, count]) => count === 0)) return { name: 'Awaiting Simulation', rate: '0.0%' };
+    entries.sort((a, b) => b[1] - a[1]);
+    const total = entries.reduce((acc, [, val]) => acc + val, 0);
+    const top = entries[0];
+    const percentage = total > 0 ? ((top[1] / total) * 100).toFixed(1) : '0.0';
+    return { name: top[0].replace(/_/g, ' '), rate: `${percentage}%` };
+  };
+
+  const topVector = getTopFailureVector();
 
   const getNodePos = (id) => {
     const n = nodes.find(item => item.id === id);
@@ -59,8 +89,7 @@ export default function App() {
   };
 
   const handleMouseDownCanvas = (e) => {
-    // If clicking directly on canvas background, initiate pan
-    if (e.target === canvasRef.current || e.target.tagName === 'svg' || e.target.tagName === 'DIV' && e.target.dataset.panningArea) {
+    if (e.target === canvasRef.current || e.target.tagName === 'svg' || (e.target.tagName === 'DIV' && e.target.dataset.panningArea)) {
       setIsPanning(true);
       panStartRef.current = { x: e.clientX - panOffset.x, y: e.clientY - panOffset.y };
     }
@@ -85,11 +114,98 @@ export default function App() {
     setIsPanning(false);
   };
 
+  const handleTouchStartCanvas = (e) => {
+    if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      touchStartDistRef.current = dist;
+      touchStartZoomRef.current = zoomLevel;
+    } else if (e.touches.length === 1 && (e.target === canvasRef.current || e.target.tagName === 'svg' || e.target.dataset?.panningArea)) {
+      setIsPanning(true);
+      panStartRef.current = { x: e.touches[0].clientX - panOffset.x, y: e.touches[0].clientY - panOffset.y };
+    }
+  };
+
+  const handleTouchMoveCanvas = (e) => {
+    if (e.touches.length === 2 && touchStartDistRef.current) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const factor = dist / touchStartDistRef.current;
+      const newZoom = Math.max(0.6, Math.min(1.8, touchStartZoomRef.current * factor));
+      setZoomLevel(newZoom);
+    } else if (e.touches.length === 1 && isPanning) {
+      setPanOffset({
+        x: e.touches[0].clientX - panStartRef.current.x,
+        y: e.touches[0].clientY - panStartRef.current.y
+      });
+    }
+  };
+
+  const handleTouchEndCanvas = () => {
+    touchStartDistRef.current = null;
+    setIsPanning(false);
+  };
+
+  const handleWheelCanvas = (e) => {
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const zoomFactor = e.deltaY < 0 ? 0.08 : -0.08;
+      setZoomLevel(prev => Math.max(0.6, Math.min(1.8, prev + zoomFactor)));
+    }
+  };
+
   const handleZoomIn = () => setZoomLevel(prev => Math.min(prev + 0.15, 1.8));
   const handleZoomOut = () => setZoomLevel(prev => Math.max(prev - 0.15, 0.6));
   const handleResetZoom = () => {
     setZoomLevel(1);
     setPanOffset({ x: 0, y: 0 });
+  };
+
+  const handleDownloadPdf = () => {
+    setIsDownloadingPdf(true);
+    setLogs(prev => [
+      { time: new Date().toLocaleTimeString(), level: 'SYS', msg: '📄 Compiling active audit report into professional PDF format...' },
+      ...prev
+    ]);
+
+    if (!window.html2pdf) {
+      const script = document.createElement('script');
+      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js';
+      script.onload = () => executePdfExport();
+      document.body.appendChild(script);
+    } else {
+      executePdfExport();
+    }
+  };
+
+  const executePdfExport = () => {
+    const element = reportRef.current;
+    const opt = {
+      margin:       10,
+      filename:     `sentrypulse_audit_report_${Date.now()}.pdf`,
+      image:        { type: 'jpeg', quality: 0.98 },
+      html2canvas:  { scale: 2, useCORS: true, logging: false },
+      jsPDF:        { unit: 'mm', format: 'a4', orientation: 'portrait' }
+    };
+
+    window.html2pdf().from(element).set(opt).save().then(() => {
+      setIsDownloadingPdf(false);
+      setLogs(prev => [
+        { time: new Date().toLocaleTimeString(), level: 'SYS', msg: '✅ PDF audit report successfully generated and downloaded.' },
+        ...prev
+      ]);
+    }).catch(err => {
+      console.error(err);
+      setIsDownloadingPdf(false);
+      setLogs(prev => [
+        { time: new Date().toLocaleTimeString(), level: 'CRIT', msg: '❌ Failed to export PDF report.' },
+        ...prev
+      ]);
+    });
   };
 
   const handleRunSimulation = () => {
@@ -102,6 +218,7 @@ export default function App() {
     setTimeout(() => {
       setIsSimulating(false);
       setSimState('ATTACKED');
+      setSimulationCount(prev => prev + 1);
 
       const failCandidates = ['2', '4', '6', '8'];
       const shuffled = failCandidates.sort(() => 0.5 - Math.random());
@@ -117,6 +234,15 @@ export default function App() {
 
       const randAlert1 = failureTypes[Math.floor(Math.random() * failureTypes.length)];
       const randAlert2 = failureTypes[Math.floor(Math.random() * failureTypes.length)];
+
+      // Increment dynamic anomaly stats counters
+      const detectedBatch = Math.floor(Math.random() * 300) + 150;
+      setTotalAnomaliesDetected(prev => prev + detectedBatch);
+      setFailureTypeStats(prev => ({
+        ...prev,
+        [randAlert1.alert]: prev[randAlert1.alert] + 1,
+        [randAlert2.alert]: prev[randAlert2.alert] + 1
+      }));
 
       setNodes(nodes.map((node) => {
         if (node.id === primaryFail) {
@@ -156,7 +282,7 @@ export default function App() {
 
     setNodes(nodes.map(n => {
       if (n.id === dynamicFailureReport?.primary || n.id === dynamicFailureReport?.secondary) {
-        return { ...n, status: 'PATCHING', alert: 'REmediating...' };
+        return { ...n, status: 'PATCHING', alert: 'Remediating...' };
       }
       return n;
     }));
@@ -179,8 +305,16 @@ export default function App() {
     setSelectedNode(null);
     setDynamicFailureReport(null);
     setNodes(initialNodes);
+    setSimulationCount(0);
+    setTotalAnomaliesDetected(0);
+    setFailureTypeStats({
+      'THREADPOOL_DEADLOCK': 0,
+      'MEMORY_LEAK_SPIKE': 0,
+      'WRITE_LOCK_CONTEST': 0,
+      'BUFFER_SATURATION': 0
+    });
     setLogs(prev => [
-      { time: new Date().toLocaleTimeString(), level: 'SYS', msg: '⚡ Manual reset triggered. Topology nominal.' },
+      { time: new Date().toLocaleTimeString(), level: 'SYS', msg: '⚡ Manual session reset triggered. Audit state refreshed.' },
       ...prev
     ]);
   };
@@ -252,7 +386,68 @@ export default function App() {
       {/* Main Dashboard Container */}
       <main className="flex-1 p-6 space-y-6 max-w-[1700px] w-full mx-auto">
         
-        {/* Status Telemetry Ribbon including 100k Problem Detection Summary */}
+        {/* Hidden Report Container specifically styled for clean PDF generation */}
+        <div style={{ display: 'none' }}>
+          <div ref={reportRef} style={{ padding: '24px', fontFamily: 'monospace', color: '#111', background: '#fff', width: '800px' }}>
+            <div style={{ borderBottom: '2px solid #10b981', paddingBottom: '12px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h1 style={{ fontSize: '20px', fontWeight: 'bold', margin: '0 0 4px 0', color: '#065f46' }}>SENTRYPULSE AUDIT REPORT</h1>
+                <p style={{ fontSize: '11px', color: '#4b5563', margin: '0' }}>Autonomous Infrastructure Resilience & 100k Monte Carlo Log Stream</p>
+              </div>
+              <div style={{ textAlign: 'right', fontSize: '10px', color: '#6b7280' }}>
+                <p style={{ margin: '0 0 2px 0' }}>Generated: {new Date().toLocaleString()}</p>
+                <p style={{ margin: '0' }}>System Status: <strong>{simState}</strong></p>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '20px', padding: '12px', background: '#f3f4f6', borderRadius: '6px' }}>
+              <h3 style={{ fontSize: '12px', fontWeight: 'bold', margin: '0 0 8px 0', color: '#1f2937' }}>Executive Summary</h3>
+              <p style={{ fontSize: '11px', margin: '0 0 6px 0' }}>Simulation State: <strong>{simState}</strong></p>
+              <p style={{ fontSize: '11px', margin: '0 0 6px 0' }}>Total Runs Executed: <strong>{simulationCount}</strong></p>
+              <p style={{ fontSize: '11px', margin: '0 0 6px 0' }}>Cumulative Anomalies Flagged: <strong>{totalAnomaliesDetected}</strong></p>
+              <p style={{ fontSize: '11px', margin: '0' }}>Top Active Failure Vector: <strong>{topVector.name} ({topVector.rate})</strong></p>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <h3 style={{ fontSize: '12px', fontWeight: 'bold', margin: '0 0 8px 0', color: '#1f2937' }}>Node Telemetry Snapshot</h3>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '10px' }}>
+                <thead>
+                  <tr style={{ background: '#e5e7eb', textAlign: 'left' }}>
+                    <th style={{ padding: '6px', border: '1px solid #d1d5db' }}>Microservice</th>
+                    <th style={{ padding: '6px', border: '1px solid #d1d5db' }}>Tier</th>
+                    <th style={{ padding: '6px', border: '1px solid #d1d5db' }}>Status</th>
+                    <th style={{ padding: '6px', border: '1px solid #d1d5db' }}>CPU</th>
+                    <th style={{ padding: '6px', border: '1px solid #d1d5db' }}>Latency</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {nodes.map(n => (
+                    <tr key={n.id}>
+                      <td style={{ padding: '6px', border: '1px solid #d1d5db' }}>{n.label}</td>
+                      <td style={{ padding: '6px', border: '1px solid #d1d5db' }}>{n.tier}</td>
+                      <td style={{ padding: '6px', border: '1px solid #d1d5db', fontWeight: 'bold', color: n.status === 'NOMINAL' ? '#059669' : '#dc2626' }}>{n.status}</td>
+                      <td style={{ padding: '6px', border: '1px solid #d1d5db' }}>{n.cpu}</td>
+                      <td style={{ padding: '6px', border: '1px solid #d1d5db' }}>{n.latency}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div>
+              <h3 style={{ fontSize: '12px', fontWeight: 'bold', margin: '0 0 8px 0', color: '#1f2937' }}>Live SSE Audit Session Logs</h3>
+              <div style={{ border: '1px solid #d1d5db', borderRadius: '4px', padding: '8px', background: '#fafafa', fontSize: '9px', maxHeight: '300px', overflowY: 'auto' }}>
+                {logs.map((log, i) => (
+                  <div key={i} style={{ marginBottom: '4px', borderBottom: '1px solid #eee', paddingBottom: '3px' }}>
+                    <span style={{ color: '#6b7280' }}>[{log.time}]</span> <strong style={{ color: '#047857' }}>[{log.level}]</strong> {log.msg}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Status Telemetry Ribbon (Now Dynamically Updated) */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className={`border rounded-lg p-3.5 flex justify-between items-center shadow-sm transition-colors duration-300 ${
             isDarkMode ? 'bg-[#090d14] border-slate-800' : 'bg-white border-slate-200'
@@ -270,8 +465,8 @@ export default function App() {
             isDarkMode ? 'bg-[#090d14] border-slate-800' : 'bg-white border-slate-200'
           }`}>
             <div>
-              <span className={`text-[10px] block uppercase tracking-wider ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>100k Simulations Scan</span>
-              <span className="text-xs font-bold text-rose-400">1,428 Anomalies Detected</span>
+              <span className={`text-[10px] block uppercase tracking-wider ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>100k Simulations Scan ({simulationCount} runs)</span>
+              <span className="text-xs font-bold text-rose-400">{totalAnomaliesDetected.toLocaleString()} Anomalies Flagged</span>
             </div>
             <AlertTriangle className="w-4 h-4 text-rose-400" />
           </div>
@@ -281,7 +476,7 @@ export default function App() {
           }`}>
             <div>
               <span className={`text-[10px] block uppercase tracking-wider ${isDarkMode ? 'text-slate-500' : 'text-slate-400'}`}>Top Failure Vector</span>
-              <span className="text-xs font-bold text-amber-400">Threadpool Deadlock (42.6%)</span>
+              <span className="text-xs font-bold text-amber-400">{topVector.name} ({topVector.rate})</span>
             </div>
             <CpuIcon className="w-4 h-4 text-amber-400" />
           </div>
@@ -297,7 +492,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* ZOOMABLE & PANNABLE DRAGGABLE CANVAS */}
+        {/* CANVAS (Ctrl+Scroll / Pinch / Buttons for Zoom) */}
         <div className={`border rounded-xl p-6 shadow-2xl relative overflow-hidden transition-colors duration-300 ${
           isDarkMode ? 'bg-[#090d14] border-slate-800' : 'bg-white border-slate-200'
         }`}>
@@ -305,9 +500,9 @@ export default function App() {
           <div className={`flex justify-between items-center mb-4 pb-3 border-b ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
             <div>
               <h2 className={`text-xs font-bold uppercase tracking-widest flex items-center gap-2 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-                <Network className="w-4 h-4 text-emerald-500" /> Stochastic NetworkX Digital Twin & Interactive Zoom Canvas
+                <Network className="w-4 h-4 text-emerald-500" /> Stochastic NetworkX Digital Twin (Hold Ctrl + Scroll to Zoom)
               </h2>
-              <p className={`text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Use zoom controls or pan/drag background. Drag microservices freely.</p>
+              <p className={`text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Normal page scrolling is unlocked. Use Ctrl+Wheel, pinch gestures, or buttons to zoom.</p>
             </div>
             
             {/* Zoom Controls Toolbar */}
@@ -327,7 +522,7 @@ export default function App() {
             </div>
           </div>
 
-          {/* SVG Canvas with Zoom and Pan Transform */}
+          {/* SVG Canvas */}
           <div 
             ref={canvasRef}
             data-panning-area="true"
@@ -335,6 +530,10 @@ export default function App() {
             onMouseMove={handleMouseMoveCanvas}
             onMouseUp={handleMouseUpCanvas}
             onMouseLeave={handleMouseUpCanvas}
+            onTouchStart={handleTouchStartCanvas}
+            onTouchMove={handleTouchMoveCanvas}
+            onTouchEnd={handleTouchEndCanvas}
+            onWheel={handleWheelCanvas}
             className={`w-full h-[540px] rounded-xl border relative overflow-hidden select-none cursor-grab active:cursor-grabbing ${
               isDarkMode ? 'bg-[#030508] border-slate-800/80' : 'bg-slate-100 border-slate-200'
             }`}
@@ -428,12 +627,12 @@ export default function App() {
           </div>
 
           <div className={`mt-4 pt-3 border-t flex justify-between items-center text-[11px] ${isDarkMode ? 'border-slate-800/80 text-slate-400' : 'border-slate-200 text-slate-600'}`}>
-            <span>100k Monte Carlo Iterations: <strong className="text-emerald-500">608 Threadpool Deadlocks | 412 Memory Spikes | 408 Write-Locks</strong></span>
+            <span>Total Simulation Runs: <strong className="text-emerald-500">{simulationCount}</strong> | Cumulative Anomalies: <strong className="text-rose-400">{totalAnomaliesDetected}</strong></span>
             <span>Selected Node: <strong className="text-cyan-400">{selectedNode ? `${selectedNode.label} (${selectedNode.ip})` : 'None'}</strong></span>
           </div>
         </div>
 
-        {/* Dynamic Pareto Output Matrix & Terminal */}
+        {/* Dynamic Pareto Output Matrix & Terminal with PDF Export */}
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           
           <div className={`lg:col-span-2 border rounded-xl p-6 flex flex-col justify-between shadow-xl transition-colors duration-300 ${
@@ -489,7 +688,7 @@ export default function App() {
                     <GitBranch className="w-6 h-6 text-amber-500 animate-pulse" />
                   </div>
                   <p className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>100k Monte Carlo Simulation Standby</p>
-                  <p className="text-[11px] text-slate-500">Run the stress test to aggregate 100k permutations and output precise anomaly counts.</p>
+                  <p className="text-[11px] text-slate-500">Run the stress test to aggregate Monte Carlo permutations and output dynamic failure statistics.</p>
                 </div>
               )}
             </div>
@@ -509,6 +708,7 @@ export default function App() {
             )}
           </div>
 
+          {/* Terminal & Save PDF Report Panel */}
           <div className={`border rounded-xl p-6 flex flex-col shadow-xl transition-colors duration-300 ${
             isDarkMode ? 'bg-[#090d14] border-slate-800' : 'bg-white border-slate-200'
           }`}>
@@ -516,7 +716,20 @@ export default function App() {
               <h3 className={`text-xs font-bold uppercase tracking-widest flex items-center gap-2 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
                 <Terminal className="w-4 h-4 text-cyan-500" /> Live SSE Audit Stream
               </h3>
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+              <div className="flex items-center gap-2">
+                <button 
+                  onClick={handleDownloadPdf}
+                  disabled={isDownloadingPdf}
+                  title="Download Scan Report as PDF"
+                  className={`px-2.5 py-1 rounded border flex items-center gap-1.5 transition-all cursor-pointer font-bold ${
+                    isDarkMode ? 'bg-slate-900 border-slate-700 text-emerald-400 hover:bg-slate-800' : 'bg-slate-100 border-slate-300 text-emerald-600 hover:bg-slate-200'
+                  } disabled:opacity-50`}
+                >
+                  {isDownloadingPdf ? <RefreshCw className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                  {isDownloadingPdf ? 'Exporting PDF...' : 'Save PDF'}
+                </button>
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+              </div>
             </div>
             
             <div className={`flex-1 border rounded-lg p-3.5 font-mono text-[10px] space-y-2.5 overflow-y-auto max-h-[220px] shadow-inner ${
