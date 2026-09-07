@@ -1,0 +1,43 @@
+{
+  "name": "SentryPulse Self-Healing Trigger",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "sentrypulse-trigger",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "sentrypulse-trigger"
+    },
+    {
+      "parameters": {
+        "url": "http://sentrypulse-api:8000/api/v1/n8n/trigger",
+        "method": "POST",
+        "jsonParameters": true,
+        "options": {},
+        "bodyParametersJson": "={{ $json.body }}"
+      },
+      "name": "Trigger FastAPI Healing",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [500, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          {
+            "node": "Trigger FastAPI Healing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

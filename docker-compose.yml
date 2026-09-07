@@ -1,0 +1,20 @@
+version: '3.8'
+
+services:
+  sentrypulse-api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - PORT=8000
+      - DEMO_FALLBACK_MODE=true
+    restart: always
+
+  n8n:
+    image: n8nio/n8n:latest
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=localhost
+      - WEBHOOK_URL=http://localhost:5678/
+    restart: always
