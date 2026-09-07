@@ -2,7 +2,8 @@ import { Sun, Moon, RefreshCw, Sparkles } from 'lucide-react';
 
 export default function HeaderToolBar({
   isDarkMode, onToggleTheme, simState, isSimulating,
-  backendStatus, groqLive, apiBase, onRunSimulation, onReset,
+  backendStatus, groqLive, liveSource, apiBase, onRunSimulation, onReset,
+  runDisabled = false, runDisabledHint = '',
 }) {
   const isAttacked = simState === 'ATTACKED';
   const isHealing = simState === 'HEALING';
@@ -26,7 +27,14 @@ export default function HeaderToolBar({
               : (isDarkMode ? 'bg-slate-800 text-slate-400 border-slate-700' : 'bg-slate-100 text-slate-500 border-slate-200')
           }`}>
             {backendStatus === 'live' ? `● BACKEND LIVE${groqLive ? ' + GROQ' : ''}` : backendStatus === 'offline' ? '○ LOCAL SIM MODE' : '… CONNECTING'}
-          </span>
+            </span>
+            {liveSource === 'demo-site' && (
+              <span title="Twin is scoring REAL demo-site metrics" className={`text-[10px] px-2.5 py-0.5 rounded border font-bold ${
+                isDarkMode ? 'bg-cyan-950/40 text-cyan-300 border-cyan-500/30' : 'bg-cyan-50 text-cyan-700 border-cyan-300'
+              }`}>
+                ● LIVE SITE
+              </span>
+            )}
         </div>
         <div className={`h-4 w-px ${isDarkMode ? 'bg-slate-800' : 'bg-slate-200'}`}></div>
         <span className={`text-[11px] hidden md:inline ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Autonomous Infrastructure Resilience & 100k Monte Carlo Stress Engine</span>
@@ -45,7 +53,8 @@ export default function HeaderToolBar({
 
         <button
           onClick={onRunSimulation}
-          disabled={isSimulating || isHealing}
+          disabled={isSimulating || isHealing || runDisabled}
+          title={runDisabled ? runDisabledHint : 'Run synthetic 100k Monte Carlo simulation'}
           className="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-4 py-2.5 rounded-md flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50 shadow-[0_0_20px_rgba(16,185,129,0.3)] animate-pulse"
         >
           {isSimulating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 fill-current" />}

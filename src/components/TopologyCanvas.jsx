@@ -7,16 +7,23 @@ import {
 /**
  * Interactive SVG topology canvas (FR-2.1). Owns view state (zoom / pan /
  * drag); node data + simulation status flow in from App via props.
+ *
+ * Two modes: 'static' renders the hardcoded 8-node graph (synthetic mode);
+ * 'live' renders the 4 demo-site victim nodes from useLiveTopology,
+ * hiding the fictional nodes. Drag positions in live mode are kept in a
+ * local override map so the 2s poll rhythm never snaps nodes back.
  */
 export default function TopologyCanvas({
   nodes, onMoveNode, selectedNode, onSelectNode,
   simState, isDarkMode, simulationCount, totalAnomaliesDetected,
+  mode = 'static', liveNodes = null, liveEdges = [],
 }) {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
   const [draggingNodeId, setDraggingNodeId] = useState(null);
   const [dragOffset, setDragOffset] = useState({ x: 0, y: 0 });
+  const [posOv, setPosOv] = useState({});
 
   const panStartRef = useRef({ x: 0, y: 0 });
   const touchStartDistRef = useRef(null);
@@ -25,9 +32,17 @@ export default function TopologyCanvas({
 
   const isAttacked = simState === 'ATTACKED';
   const isHealing = simState === 'HEALING';
+  const live = mode === 'live' && Array.isArray(liveNodes);
+  const keyOf = (n) => n.node_id ?? n.id;
+  const displayNodes = live
+    ? liveNodes.map((n) => ({ ...n, ...(posOv[n.node_id] || {}) }))
+    : nodes;
+  const selectedKey = selectedNode ? (selectedNode.node_id ?? selectedNode.id) : null;
 
   const getNodePos = (id) => {
-    const n = nodes.find((item) => item.id === id);
+    const n = live
+      ? displayNodes.find((item) => item.node_id === id)
+      : displayNodes.find((item) => item.id === id);
     return n ? { x: n.x + 110, y: n.y + 45 } : { x: 0, y: 0 };
   };
   const p1 = getNodePos('1');
@@ -42,7 +57,7 @@ export default function TopologyCanvas({
   const handleMouseDownNode = (e, node) => {
     e.stopPropagation();
     const rect = canvasRef.current.getBoundingClientRect();
-    setDraggingNodeId(node.id);
+    setDraggingNodeId(keyOf(node));
     setDragOffset({
       x: ((e.clientX - rect.left) / zoomLevel) - node.x,
       y: ((e.clientY - rect.top) / zoomLevel) - node.y,
@@ -63,7 +78,11 @@ export default function TopologyCanvas({
       const rect = canvasRef.current.getBoundingClientRect();
       const newX = Math.max(10, Math.min(rect.width / zoomLevel - 240, ((e.clientX - rect.left) / zoomLevel) - dragOffset.x));
       const newY = Math.max(10, Math.min(rect.height / zoomLevel - 100, ((e.clientY - rect.top) / zoomLevel) - dragOffset.y));
-      onMoveNode(draggingNodeId, newX, newY);
+      if (live) {
+        setPosOv((prev) => ({ ...prev, [draggingNodeId]: { x: newX, y: newY } }));
+      } else {
+        onMoveNode(draggingNodeId, newX, newY);
+      }
     } else if (isPanning) {
       setPanOffset({ x: e.clientX - panStartRef.current.x, y: e.clientY - panStartRef.current.y });
     }
@@ -129,9 +148,9 @@ export default function TopologyCanvas({
       <div className={`flex justify-between items-center mb-4 pb-3 border-b ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
         <div>
           <h2 className={`text-xs font-bold uppercase tracking-widest flex items-center gap-2 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
-            <Network className="w-4 h-4 text-emerald-500" /> Stochastic NetworkX Digital Twin (Hold Ctrl + Scroll to Zoom)
+            <Network className="w-4 h-4 text-emerald-500" /> {live ? 'Live Demo-Site Topology (4 victim nodes)' : 'Stochastic NetworkX Digital Twin (Hold Ctrl + Scroll to Zoom)'}
           </h2>
-          <p className={`text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Click any node to inspect telemetry. Click canvas background to deselect.</p>
+          <p className={`text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>{live ? 'Live victim graph from demo-site. Drag to rearrange.' : 'Click any node to inspect telemetry. Click canvas background to deselect.'}</p>
         </div>
         <div className="flex items-center gap-2">
           <span className={`text-[10px] px-2 py-1 rounded font-mono ${isDarkMode ? 'bg-slate-900 text-slate-300 border border-slate-800' : 'bg-slate-100 text-slate-700 border border-slate-200'}`}>
@@ -177,26 +196,40 @@ export default function TopologyCanvas({
               </marker>
             </defs>
             <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={isAttacked ? '#f43f5e' : '#10b981'} strokeWidth="2" markerEnd="url(#arrow)" />
-            <line x1={p2.x} y1={p2.y} x2={p4.x} y2={p4.y} stroke={isAttacked ? '#f43f5e' : '#10b981'} strokeWidth="2.5" strokeDasharray={isAttacked ? '4 4' : 'none'} markerEnd="url(#arrow)" />
-            <line x1={p4.x} y1={p4.y} x2={p6.x} y2={p6.y} stroke={isAttacked ? '#f43f5e' : '#10b981'} strokeWidth="3" markerEnd="url(#arrow)" />
-            <line x1={p2.x} y1={p2.y} x2={p3.x} y2={p3.y} stroke="#06b6d4" strokeWidth="1.5" strokeDasharray="3 3" markerEnd="url(#arrow)" />
-            <line x1={p4.x} y1={p4.y} x2={p5.x} y2={p5.y} stroke="#10b981" strokeWidth="1.5" markerEnd="url(#arrow)" />
-            <line x1={p2.x} y1={p2.y} x2={p7.x} y2={p7.y} stroke="#a855f7" strokeWidth="1.5" markerEnd="url(#arrow)" />
-            <line x1={p7.x} y1={p7.y} x2={p8.x} y2={p8.y} stroke="#a855f7" strokeWidth="1.5" strokeDasharray="4 4" markerEnd="url(#arrow)" />
+            {!live && (
+              <>
+                <line x1={p2.x} y1={p2.y} x2={p4.x} y2={p4.y} stroke={isAttacked ? '#f43f5e' : '#10b981'} strokeWidth="2.5" strokeDasharray={isAttacked ? '4 4' : 'none'} markerEnd="url(#arrow)" />
+                <line x1={p4.x} y1={p4.y} x2={p6.x} y2={p6.y} stroke={isAttacked ? '#f43f5e' : '#10b981'} strokeWidth="3" markerEnd="url(#arrow)" />
+                <line x1={p2.x} y1={p2.y} x2={p3.x} y2={p3.y} stroke="#06b6d4" strokeWidth="1.5" strokeDasharray="3 3" markerEnd="url(#arrow)" />
+                <line x1={p4.x} y1={p4.y} x2={p5.x} y2={p5.y} stroke="#10b981" strokeWidth="1.5" markerEnd="url(#arrow)" />
+                <line x1={p2.x} y1={p2.y} x2={p7.x} y2={p7.y} stroke="#a855f7" strokeWidth="1.5" markerEnd="url(#arrow)" />
+                <line x1={p7.x} y1={p7.y} x2={p8.x} y2={p8.y} stroke="#a855f7" strokeWidth="1.5" strokeDasharray="4 4" markerEnd="url(#arrow)" />
+              </>
+            )}
+            {live && liveEdges.map(([from, to], i) => {
+              const a = getNodePos(from);
+              const b = getNodePos(to);
+              return (
+                <line key={`${from}-${to}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={isAttacked ? '#f43f5e' : '#10b981'} strokeWidth={i === 1 ? 3 : 2} strokeDasharray={isAttacked ? '4 4' : 'none'} markerEnd="url(#arrow)" />
+              );
+            })}
+
             {!isAttacked && !isHealing && (
               <circle r="4" fill="#38bdf8">
-                <animateMotion path={`M ${p2.x} ${p2.y} L ${p4.x} ${p4.y}`} dur="2s" repeatCount="indefinite" />
+                <animateMotion path={live && liveEdges.length > 0 ? `M ${getNodePos(liveEdges[0][0]).x} ${getNodePos(liveEdges[0][0]).y} L ${getNodePos(liveEdges[0][1]).x} ${getNodePos(liveEdges[0][1]).y}` : `M ${p2.x} ${p2.y} L ${p4.x} ${p4.y}`} dur="2s" repeatCount="indefinite" />
               </circle>
             )}
           </svg>
 
-          {nodes.map((node) => {
+          {displayNodes.map((node) => {
             const isCritical = node.status === 'CRITICAL' || node.status === 'WARNING';
             const isPatching = node.status === 'PATCHING';
-            const isSelected = selectedNode?.id === node.id;
+            const isSelected = selectedKey === keyOf(node);
+            const cpuText = node.cpu ?? `${node.cpu_pct ?? '?'}%`;
+            const latText = node.latency ?? `${node.latency_ms ?? '?'}ms`;
             return (
               <div
-                key={node.id}
+                key={keyOf(node)}
                 onMouseDown={(e) => handleMouseDownNode(e, node)}
                 style={{ left: `${node.x}px`, top: `${node.y}px` }}
                 className={`absolute w-56 p-3 rounded-lg border transition-shadow cursor-grab active:cursor-grabbing pointer-events-auto z-10 backdrop-blur-md shadow-xl ${
@@ -227,8 +260,11 @@ export default function TopologyCanvas({
                   <span className="truncate">{node.label}</span>
                 </h3>
                 <div className={`space-y-0.5 text-[10px] border-t pt-1 ${isDarkMode ? 'border-slate-800' : 'border-slate-100'}`}>
-                  <div className="flex justify-between text-slate-400"><span>CPU:</span> <span className="font-bold text-slate-200">{node.cpu}</span></div>
-                  <div className="flex justify-between text-slate-400"><span>Latency:</span> <span className={isCritical ? 'text-rose-400 font-bold' : 'text-slate-200'}>{node.latency}</span></div>
+                  <div className="flex justify-between text-slate-400"><span>CPU:</span> <span className="font-bold text-slate-200">{cpuText}</span></div>
+                  <div className="flex justify-between text-slate-400"><span>Latency:</span> <span className={isCritical ? 'text-rose-400 font-bold' : 'text-slate-200'}>{latText}</span></div>
+                  {node.pid != null && (
+                    <div className="flex justify-between text-slate-400"><span>PID:</span> <span className="font-mono text-cyan-400">{node.pid}</span></div>
+                  )}
                 </div>
                 {node.alert && (
                   <div className={`mt-1 pt-1 border-t text-[9px] font-bold flex items-center gap-1 ${isPatching ? 'border-amber-500/30 text-amber-300' : 'border-rose-500/30 text-rose-400'}`}>

@@ -73,3 +73,20 @@ docker compose up --build
 python -m pytest tests/ -q
 npm run build
 ```
+
+### Live victim site (demo-site/)
+
+`demo-site/` is a miniature banking stack (gateway :8001 → api :8002 →
+dbsim :8003) with real request metrics. Point SentryPulse at it to score
+genuine traffic instead of the synthetic twin:
+
+```bash
+python demo-site/supervisor.py &
+python demo-site/loadgen.py --rps 100 --duration 300 &
+DEMO_SITE_URL=http://127.0.0.1:8004 uvicorn backend.main:app --port 8000
+```
+
+Then `python demo-site/faults.py latency api 2000` (or `kill db`) and cure
+from the UI — heal restarts the real victim process. The header shows
+`● LIVE SITE` when active. Full procedure + calibration notes:
+`demo-site/README.md`.

@@ -9,8 +9,12 @@ from sklearn.ensemble import IsolationForest
 
 
 class AnomalyScorer:
-    def __init__(self, warmup_samples: int = 200) -> None:
+    def __init__(self, warmup_samples: int = 200, refit_interval: int = 500) -> None:
         self._warmup_samples = warmup_samples
+        # None disables periodic refit (live demo-site scorer: refitting on
+        # a history full of sustained-fault samples would teach the model
+        # that attacks are the new normal and dull CRITICAL to DEGRADED).
+        self._refit_interval = refit_interval
         self._history: list[list[float]] = []
         self._model: IsolationForest | None = None
         self._raw_low = -0.1
@@ -49,7 +53,7 @@ class AnomalyScorer:
         self._history.append([latency_ms, cpu_pct, error_rate])
         if len(self._history) > 2000:
             self._history.pop(0)
-        if len(self._history) % 500 == 0:
+        if self._refit_interval and len(self._history) % self._refit_interval == 0:
             self._refit()
 
         return score

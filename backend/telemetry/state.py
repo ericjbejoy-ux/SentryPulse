@@ -31,6 +31,9 @@ class DigitalTwinState:
 
     def __init__(self) -> None:
         self._lock = threading.Lock()
+        # "synthetic" normally; the demo-site adapter flips this to
+        # "demo-site" whenever it successfully applies a live sample.
+        self.source: str = "synthetic"
         self._nodes: Dict[TopologyNodeId, NodeHealth] = {
             node_id: NodeHealth(
                 node_id=node_id,
@@ -67,8 +70,16 @@ class DigitalTwinState:
 
     def tick(self, anomaly_scorer) -> None:
         """One polling cycle (FR-1.1: sub-second polling intervals)."""
+        self.tick_subset(anomaly_scorer, set(self._nodes))
+
+    def tick_subset(self, anomaly_scorer, only: set) -> None:
+        """Advance a subset of nodes synthetically (demo-site mode keeps
+        the victim-less upi-settlement-cache ticking while live nodes are
+        fed by the adapter)."""
         with self._lock:
             for node_id in self._nodes:
+                if node_id not in only:
+                    continue
                 is_attacked = node_id == self._attacked_node
                 latency = random.uniform(300, 800) if is_attacked else random.uniform(20, 90)
                 cpu = random.uniform(75, 99) if is_attacked else random.uniform(15, 45)
@@ -95,6 +106,42 @@ class DigitalTwinState:
                     rps=rps,
                     error_rate=round(error_rate, 4),
                 )
+
+    def apply_live_sample(
+        self,
+        node_id: TopologyNodeId,
+        latency_ms: float,
+        cpu_pct: float,
+        rps: int,
+        error_rate: float,
+        anomaly_score: float,
+    ) -> None:
+        """Write one adapter-scored live sample (demo-site mode).
+
+        Displayed metrics are the REAL measured values; only the score
+        comes pre-computed (the adapter calibrates into the scorer band).
+        """
+        if anomaly_score >= CRITICAL_ANOMALY_THRESHOLD:
+            state = TwinNodeState.CRITICAL
+        elif anomaly_score >= DEGRADED_ANOMALY_THRESHOLD:
+            state = TwinNodeState.DEGRADED
+        else:
+            state = TwinNodeState.NOMINAL
+        with self._lock:
+            self.source = "demo-site"
+            self._nodes[node_id] = NodeHealth(
+                node_id=node_id,
+                state=state,
+                anomaly_score=round(max(0.0, min(1.0, anomaly_score)), 3),
+                latency_ms=round(latency_ms, 1),
+                cpu_pct=round(cpu_pct, 1),
+                rps=rps,
+                error_rate=round(error_rate, 4),
+            )
+
+    def mark_synthetic(self) -> None:
+        with self._lock:
+            self.source = "synthetic"
 
     def as_flat_snapshot(self) -> TelemetrySnapshot:
         """Collapse multi-node state into SRS 5.1 flat shape."""

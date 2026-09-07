@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { api, API_BASE } from './lib/api.js';
+import { useLiveTopology } from './lib/useLiveTopology.js';
+import FaultBar from './components/FaultBar.jsx';
 import HeaderToolBar from './components/HeaderToolBar.jsx';
 import StatusRibbon from './components/StatusRibbon.jsx';
 import TopologyCanvas from './components/TopologyCanvas.jsx';
@@ -18,13 +20,14 @@ export default function App() {
   // Unified-backend connection state (backend-first, local-sim fallback per NFR-4.1)
   const [backendStatus, setBackendStatus] = useState('checking'); // 'checking' | 'live' | 'offline'
   const [groqLive, setGroqLive] = useState(false);
+  const [liveSource, setLiveSource] = useState('synthetic'); // 'synthetic' | 'demo-site'
   const [triageReport, setTriageReport] = useState(null);
   const liveSnapshotRef = useRef(null);
 
   useEffect(() => {
     let mounted = true;
     api.health()
-      .then((h) => { if (mounted) { setBackendStatus('live'); setGroqLive(!!h.groq_live); } })
+      .then((h) => { if (mounted) { setBackendStatus('live'); setGroqLive(!!h.groq_live); setLiveSource(h.source || 'synthetic'); } })
       .catch(() => { if (mounted && !liveSnapshotRef.current) setBackendStatus('offline'); });
     const unsub = api.subscribeStream(
       (snap) => {
@@ -233,6 +236,52 @@ export default function App() {
   const handleExecuteCure = () => {
     setSimState('HEALING');
     setSelectedNode(null); // Clear selection on cure execution
+
+    // LIVE MODE: heal EVERY failing live node in one click (no sim needed).
+    if (liveMode && liveIncident.length > 0) {
+      const targets = liveIncident.map((n) => n.node_id);
+      const labels = liveIncident.map((n) => n.label);
+      setLogs(prev => [
+        { time: new Date().toLocaleTimeString(), level: 'AI', msg: `🛠️ Deploying Strategy [Option ${selectedOption}] to isolate & repair live incident [${labels.join(', ')}]...` },
+        ...prev
+      ]);
+      Promise.allSettled(targets.map((target) =>
+        api.heal({
+          node_id: target,
+          anomaly_type: 'THREADPOOL_LOCK',
+          strategy: selectedOption === 'A' ? `ISOLATE_DB_THREADPOOL_${target}` : 'DRAIN_GATEWAY_REGION_AWS',
+          severity: 'critical',
+        })
+      )).then((results) => {
+        results.forEach((r, i) => {
+          if (r.status === 'fulfilled') {
+            const res = r.value;
+            const restart = res.details?.victim_restart;
+            setLogs((prev) => [
+              { time: new Date().toLocaleTimeString(), level: 'SYS', msg: `⚡ Healed [${targets[i]}] (${res.execution_id}${restart?.pid ? `, victim restarted pid ${restart.pid}` : ''}${res.fallback_engaged ? ', via demo fallback' : ''}).` },
+              ...prev
+            ]);
+          } else {
+            setLogs((prev) => [
+              { time: new Date().toLocaleTimeString(), level: 'WARN', msg: `⚠️ Heal failed for [${targets[i]}]: ${r.reason?.message || r.reason}` },
+              ...prev
+            ]);
+          }
+        });
+      });
+      setTimeout(() => {
+        setLogs(prev => [
+          { time: new Date().toLocaleTimeString(), level: 'SYS', msg: `⚡ Autonomous remediation completed for [${labels.join(', ')}]. Watching twin recovery…` },
+          ...prev
+        ]);
+        // Return the panel to standby; a persisting incident re-arms via
+        // liveIncident (auto-triage won't refire for the same key).
+        setSimState('NOMINAL');
+        triageFiredRef.current = '';
+      }, 2500);
+      return;
+    }
+
     setLogs(prev => [
       { time: new Date().toLocaleTimeString(), level: 'AI', msg: `🛠️ Deploying Strategy [Option ${selectedOption}] to isolate & repair [${dynamicFailureReport?.primary}, ${dynamicFailureReport?.secondary}]...` },
       ...prev
@@ -301,6 +350,46 @@ export default function App() {
     api.reset().catch(() => { /* backend already offline or resetting; local state is authoritative */ });
   };
 
+  // Live victim graph (demo-site mode only; null => hardcoded static graph).
+  const topology = useLiveTopology(liveSource, backendStatus);
+  const liveMode = topology != null;
+  // Live incident, independent of any simulation: any live node not NOMINAL
+  // arms the Pareto panel + cure directly — no RUN click required.
+  const liveIncident = liveMode
+    ? topology.nodes.filter((n) => n.state === 'CRITICAL' || n.state === 'WARNING')
+    : [];
+  const liveIncidentKey = liveIncident.map((n) => n.node_id).sort().join(',');
+  const triageFiredRef = useRef('');
+
+  // Auto-triage: first sight of a live incident fetches a real diagnosis once.
+  useEffect(() => {
+    if (!liveIncidentKey || triageFiredRef.current === liveIncidentKey) return;
+    triageFiredRef.current = liveIncidentKey;
+    const worst = [...liveIncident].sort((a, b) => (b.anomaly_score || 0) - (a.anomaly_score || 0))[0];
+    if (!worst) return;
+    pushLog('WARN', `🚨 Live incident detected on [${liveIncident.map((n) => n.label).join(', ')}] — auto-triaging…`);
+    api.triage(
+      { latency_ms: worst.latency_ms, cpu: `${worst.cpu_pct}%`, failing_node: worst.node_id },
+      true
+    ).then((t) => {
+      setGroqLive(!!t.groq_live);
+      setTriageReport(t);
+      pushLog('AI', `${t.groq_live ? '🧠 Groq-live diagnosis' : '🤖 Rule-based triage'}: ${t.log_agent}`);
+    }).catch((err) => {
+      pushLog('WARN', `⚠️ Live auto-triage failed (${err.message})`);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveIncidentKey]);
+  // Report table needs cpu/latency strings; live nodes carry numerics.
+  const reportNodes = liveMode
+    ? topology.nodes.map((n) => ({ ...n, cpu: `${n.cpu_pct}%`, latency: `${n.latency_ms}ms` }))
+    : nodes;
+
+  // Targets for the Pareto panel: sim report wins, else live incident labels.
+  const incidentTargets = dynamicFailureReport
+    ? [dynamicFailureReport.primary, dynamicFailureReport.secondary].filter(Boolean)
+    : liveIncident.map((n) => n.label);
+
   return (
     <div className={`min-h-screen flex flex-col font-mono text-xs transition-colors duration-300 ${
       isDarkMode ? 'bg-[#05070a] text-slate-200' : 'bg-[#f8fafc] text-slate-800'
@@ -312,19 +401,24 @@ export default function App() {
         isSimulating={isSimulating}
         backendStatus={backendStatus}
         groqLive={groqLive}
+        liveSource={liveSource}
         apiBase={API_BASE}
         onRunSimulation={handleRunSimulation}
         onReset={handleReset}
+        runDisabled={liveMode}
+        runDisabledHint="Live-site mode: break things with the Crash-test bar, not synthetic sim"
       />
 
       <main className="flex-1 p-6 space-y-6 max-w-[1700px] w-full mx-auto">
+        {liveMode && <FaultBar isDarkMode={isDarkMode} onLog={pushLog} />}
+
         <StatusRibbon
           simState={simState}
           isDarkMode={isDarkMode}
           simulationCount={simulationCount}
           totalAnomaliesDetected={totalAnomaliesDetected}
           topVector={topVector}
-          nodeCount={nodes.length}
+          nodeCount={liveMode ? topology.nodes.length : nodes.length}
         />
 
         <TopologyCanvas
@@ -336,6 +430,9 @@ export default function App() {
           isDarkMode={isDarkMode}
           simulationCount={simulationCount}
           totalAnomaliesDetected={totalAnomaliesDetected}
+          mode={liveMode ? 'live' : 'static'}
+          liveNodes={topology?.nodes}
+          liveEdges={topology?.edges || []}
         />
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -347,12 +444,14 @@ export default function App() {
             triageReport={triageReport}
             isDarkMode={isDarkMode}
             onExecuteCure={handleExecuteCure}
+            liveActive={liveMode && liveIncident.length > 0}
+            incidentTargets={incidentTargets}
           />
           <TerminalDrawer
             logs={logs}
             isDarkMode={isDarkMode}
             onLog={pushLog}
-            report={{ nodes, simState, simulationCount, totalAnomaliesDetected, topVector }}
+            report={{ nodes: reportNodes, simState, simulationCount, totalAnomaliesDetected, topVector }}
           />
         </div>
       </main>

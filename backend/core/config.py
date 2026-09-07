@@ -9,6 +9,9 @@ class Settings(BaseSettings):
     # Healing / demo flags (unified MVP; env-overridable, see .env.example)
     n8n_webhook_url: str = "http://localhost:5678/webhook-test/sentrypulse-trigger"
     demo_fallback_mode: bool = True
+    # Live victim site (demo-site/supervisor.py). Empty = synthetic twin.
+    # Example: DEMO_SITE_URL=http://127.0.0.1:8004
+    demo_site_url: str = ""
 
     class Config:
         env_file = ".env"

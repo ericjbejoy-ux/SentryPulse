@@ -10,9 +10,10 @@ export default function InspectionDrawer({ node, triageReport, failureReport, is
   const subTiers = useMemo(() => {
     if (!node) return [];
     // Deterministic per-node derivation so values stay stable across renders.
-    const seed = [...node.id].reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
-    const cpuNum = parseFloat(node.cpu) || 20;
-    const latNum = parseFloat(node.latency) || 20;
+    const key = node.id ?? node.node_id ?? '?';
+    const seed = [...key].reduce((acc, ch) => acc + ch.charCodeAt(0), 0);
+    const cpuNum = parseFloat(node.cpu ?? node.cpu_pct) || 20;
+    const latNum = parseFloat(node.latency ?? node.latency_ms) || 20;
     const stressed = node.status !== 'NOMINAL';
     return [
       { name: 'Primary Write Pool', metric: `${Math.min(99, Math.round(cpuNum + ((seed * 7) % 18)))}% saturated`, hot: stressed },

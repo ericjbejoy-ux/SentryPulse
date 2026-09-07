@@ -33,6 +33,7 @@ from backend.models.twin_schemas import (
     TopologyNodeId,
 )
 from backend.routers import healing
+from backend.routers import demo as demo_router_mod
 from backend.telemetry import twin as legacy_twin_mod
 from backend.telemetry.log_parser import LogParser
 from backend.telemetry.state import twin_state
@@ -46,9 +47,27 @@ POLL_INTERVAL_SECONDS = 1.0  # NFR-1.1 budget is 1.5s; 1.0s leaves headroom
 
 
 async def _poll_loop() -> None:
+    import logging as _logging
+
+    _logger = _logging.getLogger("uvicorn.error")
+    live_mode = bool(settings.demo_site_url)
+    if live_mode:
+        from backend.telemetry import adapter
+
+        _logger.info("demo-site adapter ON (%s)", settings.demo_site_url)
     while True:
         try:
-            twin_state.tick(anomaly_scorer)
+            if live_mode:
+                try:
+                    await adapter.poll_and_apply(twin_state, settings.demo_site_url)
+                except Exception as exc:
+                    # Never let a victim outage take down the twin loop;
+                    # fall back to synthetic for this cycle.
+                    _logger.warning("demo-site poll failed (%s); synthetic tick", exc)
+                    twin_state.tick(anomaly_scorer)
+                    twin_state.mark_synthetic()
+            else:
+                twin_state.tick(anomaly_scorer)
         except Exception:
             pass
         await asyncio.sleep(POLL_INTERVAL_SECONDS)
@@ -80,6 +99,7 @@ app.add_middleware(
 )
 
 app.include_router(healing.router)
+app.include_router(demo_router_mod.router)
 
 log_parser = LogParser()
 
@@ -107,6 +127,7 @@ async def api_health() -> Dict[str, Any]:
         "status": "online",
         "groq_live": groq_client is not None,
         "topology_nodes": len(topo.get("nodes", [])),
+        "source": twin_state.source,
     }
 
 
@@ -123,6 +144,7 @@ async def get_telemetry_nodes() -> Dict[str, Any]:
     return {
         "nodes": [n.model_dump() for n in twin_state.as_node_list()],
         "snapshot": twin_state.as_flat_snapshot().model_dump(),
+        "source": twin_state.source,
     }
 
 

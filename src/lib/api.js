@@ -52,6 +52,27 @@ export const api = {
   reset: () =>
     req('/api/v1/telemetry/reset', { method: 'POST', timeoutMs: 5000 }),
 
+  // Demo-site proxy (503 when the backend runs without DEMO_SITE_URL).
+  demoTopology: () => req('/api/v1/demo/topology', { timeoutMs: 5000 }),
+  demoFault: (target, type, latency_ms = 2000, duration_s = 60) =>
+    req('/api/v1/demo/fault', {
+      method: 'POST',
+      body: JSON.stringify({ target, type, latency_ms, duration_s }),
+      timeoutMs: 8000,
+    }),
+  demoKill: (svc) =>
+    req(`/api/v1/demo/kill/${encodeURIComponent(svc)}`, {
+      method: 'POST',
+      timeoutMs: 8000,
+    }),
+  demoRestart: (svc) =>
+    req(`/api/v1/demo/restart/${encodeURIComponent(svc)}`, {
+      method: 'POST',
+      timeoutMs: 12000,
+    }),
+  demoClear: () =>
+    req('/api/v1/demo/clear', { method: 'POST', timeoutMs: 8000 }),
+
   subscribeStream: (onTelemetry, onError) => {
     try {
       const es = new EventSource(`${API_BASE}/api/v1/telemetry/stream`);
