@@ -32,12 +32,17 @@ export default function TopologyCanvas({
 
   const isAttacked = simState === 'ATTACKED';
   const isHealing = simState === 'HEALING';
-  const live = mode === 'live' && Array.isArray(liveNodes);
-  const keyOf = (n) => n.node_id ?? n.id;
+  const live = mode === 'live' && Array.isArray(liveNodes);  const keyOf = (n) => n.node_id ?? n.id;
   const displayNodes = live
     ? liveNodes.map((n) => ({ ...n, ...(posOv[n.node_id] || {}) }))
     : nodes;
   const selectedKey = selectedNode ? (selectedNode.node_id ?? selectedNode.id) : null;
+  // Alarm truth comes from the NODES, not just sim state: a live kill with
+  // no simulation running must still redden nodes, edges, and arrows.
+  const alarmed = isAttacked || isHealing || displayNodes.some(
+    (n) => n.status === 'CRITICAL' || n.status === 'WARNING'
+  );
+  const edgeColor = isHealing ? '#f59e0b' : alarmed ? '#f43f5e' : '#10b981';
 
   const getNodePos = (id) => {
     const n = live
@@ -192,14 +197,14 @@ export default function TopologyCanvas({
           <svg className="absolute inset-0 w-[2000px] h-[2000px] pointer-events-none" style={{ zIndex: 0 }}>
             <defs>
               <marker id="arrow" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
-                <path d="M 0 0 L 10 5 L 0 10 z" fill={isHealing ? '#f59e0b' : isAttacked ? '#f43f5e' : '#10b981'} />
+                <path d="M 0 0 L 10 5 L 0 10 z" fill={edgeColor} />
               </marker>
             </defs>
-            <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={isAttacked ? '#f43f5e' : '#10b981'} strokeWidth="2" markerEnd="url(#arrow)" />
+            <line x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y} stroke={alarmed ? '#f43f5e' : '#10b981'} strokeWidth="2" markerEnd="url(#arrow)" />
             {!live && (
               <>
-                <line x1={p2.x} y1={p2.y} x2={p4.x} y2={p4.y} stroke={isAttacked ? '#f43f5e' : '#10b981'} strokeWidth="2.5" strokeDasharray={isAttacked ? '4 4' : 'none'} markerEnd="url(#arrow)" />
-                <line x1={p4.x} y1={p4.y} x2={p6.x} y2={p6.y} stroke={isAttacked ? '#f43f5e' : '#10b981'} strokeWidth="3" markerEnd="url(#arrow)" />
+                <line x1={p2.x} y1={p2.y} x2={p4.x} y2={p4.y} stroke={alarmed ? '#f43f5e' : '#10b981'} strokeWidth="2.5" strokeDasharray={alarmed ? '4 4' : 'none'} markerEnd="url(#arrow)" />
+                <line x1={p4.x} y1={p4.y} x2={p6.x} y2={p6.y} stroke={alarmed ? '#f43f5e' : '#10b981'} strokeWidth="3" markerEnd="url(#arrow)" />
                 <line x1={p2.x} y1={p2.y} x2={p3.x} y2={p3.y} stroke="#06b6d4" strokeWidth="1.5" strokeDasharray="3 3" markerEnd="url(#arrow)" />
                 <line x1={p4.x} y1={p4.y} x2={p5.x} y2={p5.y} stroke="#10b981" strokeWidth="1.5" markerEnd="url(#arrow)" />
                 <line x1={p2.x} y1={p2.y} x2={p7.x} y2={p7.y} stroke="#a855f7" strokeWidth="1.5" markerEnd="url(#arrow)" />
@@ -210,11 +215,11 @@ export default function TopologyCanvas({
               const a = getNodePos(from);
               const b = getNodePos(to);
               return (
-                <line key={`${from}-${to}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={isAttacked ? '#f43f5e' : '#10b981'} strokeWidth={i === 1 ? 3 : 2} strokeDasharray={isAttacked ? '4 4' : 'none'} markerEnd="url(#arrow)" />
+                <line key={`${from}-${to}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y} stroke={alarmed ? '#f43f5e' : '#10b981'} strokeWidth={i === 1 ? 3 : 2} strokeDasharray={alarmed ? '4 4' : 'none'} markerEnd="url(#arrow)" />
               );
             })}
 
-            {!isAttacked && !isHealing && (
+            {!alarmed && (
               <circle r="4" fill="#38bdf8">
                 <animateMotion path={live && liveEdges.length > 0 ? `M ${getNodePos(liveEdges[0][0]).x} ${getNodePos(liveEdges[0][0]).y} L ${getNodePos(liveEdges[0][1]).x} ${getNodePos(liveEdges[0][1]).y}` : `M ${p2.x} ${p2.y} L ${p4.x} ${p4.y}`} dur="2s" repeatCount="indefinite" />
               </circle>

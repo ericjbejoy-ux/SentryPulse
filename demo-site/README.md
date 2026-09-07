@@ -81,10 +81,13 @@ or hardware class.
 
 - [ ] `:8001/` shows balance + working Pay + 3 green lights, zero SentryPulse running
 - [ ] UI shows 3-node live graph with real PIDs + ☠️ Crash-test bar, RUN disabled (synthetic mode: 8 nodes, RUN enabled, no bar)
-- [ ] Crash-bar `Latency` on api → api+gateway CRITICAL ≤3 polls, db untouched
+- [ ] Crash-bar `Latency` on api → api+gateway CRITICAL ≤3 polls **with red edges/arrows**, db untouched
+- [ ] Dead node cards show `DOWN — process unreachable`; erroring nodes show `SLO BREACH`; cascade shows `CASCADE RISK`
 - [ ] Site tab during fault: degraded/red light + Pay slow or failing with the real error
 - [ ] Crash-bar `Kill` on db → db CRITICAL error 1.0, chain DEGRADED/CRITICAL
 - [ ] Killing gateway → site tab shows unreachable banner, not frozen greens
 - [ ] Live incident auto-triages (`groq_live: true`) with zero RUN clicks
 - [ ] Kill all 3 → single cure heals all (PIDs change), all NOMINAL ≤20s, site green + Pay works, no refresh
+- [ ] Backend flipped to live mode after tab load → live graph appears ≤12s, no refresh; backend killed → static fallback, no frozen frame
 - [ ] `Clear all` resets victim faults; `DEMO_SITE_URL` unset → synthetic mode, `pytest tests/` green
+- [ ] Troubleshooting: stale squatters on :8001–8004 (old supervisors) → kill listeners by port, never `pkill -f` self-matching patterns

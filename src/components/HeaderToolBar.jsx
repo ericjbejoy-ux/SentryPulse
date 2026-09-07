@@ -3,9 +3,9 @@ import { Sun, Moon, RefreshCw, Sparkles } from 'lucide-react';
 export default function HeaderToolBar({
   isDarkMode, onToggleTheme, simState, isSimulating,
   backendStatus, groqLive, liveSource, apiBase, onRunSimulation, onReset,
-  runDisabled = false, runDisabledHint = '',
+  runDisabled = false, runDisabledHint = '', alertActive = false,
 }) {
-  const isAttacked = simState === 'ATTACKED';
+  const isAttacked = simState === 'ATTACKED' || alertActive;
   const isHealing = simState === 'HEALING';
 
   return (

@@ -26,9 +26,16 @@ export default function App() {
 
   useEffect(() => {
     let mounted = true;
-    api.health()
-      .then((h) => { if (mounted) { setBackendStatus('live'); setGroqLive(!!h.groq_live); setLiveSource(h.source || 'synthetic'); } })
-      .catch(() => { if (mounted && !liveSnapshotRef.current) setBackendStatus('offline'); });
+    // Health is re-polled (not mount-only): if the backend enters live
+    // mode after this tab loaded, the live graph appears without refresh.
+    // Failures leave state untouched — the SSE stream owns down-detection.
+    const checkHealth = () => {
+      api.health()
+        .then((h) => { if (mounted) { setBackendStatus('live'); setGroqLive(!!h.groq_live); setLiveSource(h.source || 'synthetic'); } })
+        .catch(() => { if (mounted && !liveSnapshotRef.current) setBackendStatus('offline'); });
+    };
+    checkHealth();
+    const id = setInterval(checkHealth, 10000);
     const unsub = api.subscribeStream(
       (snap) => {
         liveSnapshotRef.current = snap;
@@ -36,7 +43,7 @@ export default function App() {
       },
       () => { if (mounted && !liveSnapshotRef.current) setBackendStatus('offline'); }
     );
-    return () => { mounted = false; unsub(); };
+    return () => { mounted = false; clearInterval(id); unsub(); };
   }, []);
 
   // Dynamic Telemetry Metrics State (No longer hardcoded)
@@ -360,6 +367,8 @@ export default function App() {
     : [];
   const liveIncidentKey = liveIncident.map((n) => n.node_id).sort().join(',');
   const triageFiredRef = useRef('');
+  // Header + canvas alarm truth: sim state OR any live failing node.
+  const alertActive = simState !== 'NOMINAL' || liveIncident.length > 0;
 
   // Auto-triage: first sight of a live incident fetches a real diagnosis once.
   useEffect(() => {
@@ -398,6 +407,7 @@ export default function App() {
         isDarkMode={isDarkMode}
         onToggleTheme={() => setIsDarkMode(!isDarkMode)}
         simState={simState}
+        alertActive={alertActive}
         isSimulating={isSimulating}
         backendStatus={backendStatus}
         groqLive={groqLive}

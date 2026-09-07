@@ -10,6 +10,7 @@ from fastapi.testclient import TestClient
 
 from backend.core.config import settings
 from backend.main import app
+from backend.routers.demo import node_alert
 
 client = TestClient(app)
 
@@ -32,6 +33,21 @@ def _mock_client(get_payload=None, post_payload=None):
     session.post = AsyncMock(return_value=_Resp(post_payload or {}))
     mock.return_value.__aenter__.return_value = session
     return mock, session
+
+
+class AlertMappingTests(unittest.TestCase):
+    def test_down_only_when_process_missing(self):
+        self.assertEqual(node_alert("CRITICAL", None, 0.0, 12.0), "DOWN — process unreachable")
+        self.assertEqual(node_alert("CRITICAL", None, 1.0, 0.0), "DOWN — process unreachable")
+        # erroring but alive => breach, not disappearance
+        self.assertTrue(node_alert("CRITICAL", 1234, 1.0, 0.0).startswith("SLO BREACH"))
+
+    def test_breach_and_cascade(self):
+        self.assertTrue(node_alert("CRITICAL", 1234, 0.0, 480.0).startswith("SLO BREACH"))
+        self.assertEqual(node_alert("WARNING", 1234, 0.05, 600.0), "CASCADE RISK • elevated errors")
+
+    def test_nominal_silent(self):
+        self.assertIsNone(node_alert("NOMINAL", 1234, 0.0, 30.0))
 
 
 class DemoDisabledTests(unittest.TestCase):
@@ -72,6 +88,8 @@ class DemoLiveTests(unittest.TestCase):
         self.assertEqual(len(body["edges"]), 2)
         by_id = {n["node_id"]: n for n in body["nodes"]}
         self.assertNotIn("upi-settlement-cache", by_id)
+        # alert key present (None when nominal — canvas renders it if set)
+        self.assertIn("alert", by_id["core-banking-switch"])
         self.assertEqual(by_id["core-banking-switch"]["label"], "core-banking-switch")
         self.assertEqual(by_id["core-banking-switch"]["supervisor_svc"], "api")
         self.assertEqual(by_id["core-banking-switch"]["pid"], 1234)

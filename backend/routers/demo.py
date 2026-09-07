@@ -12,7 +12,7 @@ Routes:
   POST /api/v1/demo/clear      clear faults on all victims
 """
 import logging
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import httpx
 from fastapi import APIRouter, HTTPException
@@ -69,6 +69,21 @@ def _require_live() -> str:
     return settings.demo_site_url.rstrip("/")
 
 
+def node_alert(state: str, pid, error_rate: float, latency_ms: float) -> Optional[str]:
+    """Human-readable banner for a live canvas card (pure; unit-tested).
+
+    DOWN is reserved for a missing process; an erroring-but-alive service
+    is a breach, not a disappearance.
+    """
+    if state == "CRITICAL" and pid is None:
+        return "DOWN — process unreachable"
+    if state == "CRITICAL":
+        return f"SLO BREACH • {latency_ms}ms"
+    if state == "WARNING":
+        return "CASCADE RISK • elevated errors"
+    return None
+
+
 def _supervisor_svc(target: str) -> str:
     svc = (target or "").strip().lower()
     if svc in SVC_PORTS:
@@ -96,12 +111,14 @@ async def demo_topology() -> Dict[str, Any]:
             continue  # no victim: hidden from the live graph
         disp = LIVE_DISPLAY[n.node_id.value]
         svc = supervisor_service_for(n.node_id.value)
+        pid = (status.get(svc, {}) or {}).get("pid") if svc else None
         nodes.append(
             {
                 **n.model_dump(),
                 **disp,
                 "supervisor_svc": svc,
-                "pid": (status.get(svc, {}) or {}).get("pid") if svc else None,
+                "pid": pid,
+                "alert": node_alert(n.state.value, pid, n.error_rate, n.latency_ms),
             }
         )
     return {
