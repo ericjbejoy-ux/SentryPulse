@@ -1,24 +1,77 @@
-# AURA: AI-Driven Adaptive Network Digital-Twin
+# SentryPulse — Autonomous Resilience & Generative Architecture Auditor
 
-> **Real-time infrastructure resilience engine combining dynamic predictive attack simulation with multi-objective configuration optimization.**
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Stack](https://img.shields.io/badge/Stack-FastAPI%20%7C%20React%20Flow%20%7C%20Groq%20%7C%20WebSockets-blue)](#tech-stack)
+> **An Enterprise-Grade Digital Twin platform that continuously monitors microservice topology, runs stochastic Monte Carlo load simulations, performs multi-agent AI root cause analysis, and executes self-healing workflows.**
 
 ---
 
-## 🎯 Executive Summary
+## 🌟 Key Features
 
-Enterprise downtime costs over **$5,600 per minute**. Traditional Incident Response tools suffer from two critical flaws:
-1. **Reactive Triage:** They alert engineers *after* damage occurs.
-2. **Brute-Force Remediation:** Standard fixes (e.g., completely blocking an IP or node) reduce attack risk but cause massive, collateral service disruption for legitimate users.
-
-**AURA** solves this by establishing a continuous **Live Network Digital Twin**. Instead of just detecting incidents, AURA predicts threat vectors, simulates attack progression in a virtual replica, and uses **multi-objective optimization** to apply patches that minimize risk *without* sacrificing performance or availability.
+- **🌐 Digital Twin Topology Canvas:** Real-time state mapping of complex microservices (API Gateway, Core Banking, UPI Switch) with sub-topology drill-down diagnostics.
+- **🚀 100k Parallel Monte Carlo Engine:** Simulates 100,000 failure permutations in seconds to surface hidden dependency bottlenecks before they hit production.
+- **🤖 Multi-Agent AI Swarm:** Triages telemetry logs, predicts cascading failure paths, and formulates trade-off patches (`LogAgent`, `PredictorAgent`, `PatchAgent`).
+- **🎯 Pareto Frontier Decision Engine:** Evaluates candidate fixes across MTTR, financial cost, and SLA risk metrics using NSGA-II trade-off models.
+- **⚡ Autonomous Self-Healing:** Dispatches outbound `n8n` orchestration webhooks to isolate faulty threadpools and restore system health without human intervention.
+- **💻 Real-Time SSE Terminal Drawer:** Streams live backend execution logs, HTTP statuses, and anomaly scores to prove real-time non-hardcoded operation.
 
 ---
 
-## 🔬 Core Innovation: Trade-off Optimization Engine
+## 🏗️ System Architecture
 
-AURA does not simply choose the safest configuration—it evaluates the **Pareto frontier** across four critical operational vectors:
+```
+[ OpenTelemetry / Datasets ] ──► [ FastAPI Backend ] ──► [ Isolation Forest ML ]
+                                          │
+                                          ▼
+[ n8n Healing Webhooks ] ◄── [ Multi-Agent Swarm ] ──► [ React Command Center UI ]
+```
 
-$$\text{Optimal Config} = \arg\min_{\mathcal{C}} \Big( \alpha \cdot \text{Risk}(\mathcal{C}) + \beta \cdot \text{Disruption}(\mathcal{C}) + \gamma \cdot \text{Latency}(\mathcal{C}) + \delta \cdot \text{Cost}(\mathcal{C}) \Big)$$
+---
+
+## 🚀 Quickstart Guide
+
+### 1. Backend Setup (FastAPI)
+
+```bash
+# Clone repository
+git clone https://github.com/your-org/sentrypulse.git
+cd sentrypulse/backend
+
+# Install dependencies
+pip install fastapi uvicorn scikit-learn pandas
+
+# Run backend engine
+uvicorn main:app --reload --port 8000
+```
+
+### 2. Frontend Setup (React + Tailwind CSS)
+
+```bash
+cd ../frontend
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+```
+
+## 👥 Branch Distribution & Readmes
+
+Each sub-component of SentryPulse is maintained in its dedicated branch:
+
+- `feature/telemetry-engine` — `README_TELEMETRY.md` (FastAPI, OTel Ingestion, Monte Carlo)
+- `feature/ai-swarm-engine` — `README_SWARM.md` (Multi-Agent Feed, Pareto Decision Logic)
+- `feature/frontend-twin` — `README_FRONTEND.md` (React UI, Topology Graph, Pareto Chart)
+- `feature/n8n-automation` — `README_N8N.md` (n8n Webhook Listener & Mitigation Scripts)
+
+## 📡 API Contract Overview
+
+| Endpoint | Method | Description |
+| :--- | :--- | :--- |
+| `/api/v1/telemetry/live` | GET | Polls live system metric vector (latency, CPU, RPS) |
+| `/api/v1/simulation/start` | POST | Triggers 100k parallel Monte Carlo failure permutation test |
+| `/api/v1/triage` | POST | Ingests metric anomalies and returns Multi-Agent diagnostic logs |
+| `/api/v1/n8n/trigger` | POST | Fires outbound self-healing patch to n8n orchestration engine |
+
+## 📄 License
+
+Distributed under the MIT License. See `LICENSE` for more information.
