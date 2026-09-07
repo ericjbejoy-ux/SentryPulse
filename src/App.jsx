@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { 
   Zap, RefreshCw, Terminal, Server, 
   ArrowUpRight, Activity, ShieldCheck, 
-  Radio, AlertTriangle, Layers, CpuIcon, CheckCircle2, GitBranch, Sun, Moon, Network, Move, Sparkles, Wrench, ZoomIn, ZoomOut, RotateCcw, Download, Save
+  Radio, AlertTriangle, Layers, CpuIcon, CheckCircle2, GitBranch, Sun, Moon, Network, Move, Sparkles, Wrench, ZoomIn, ZoomOut, RotateCcw, Download, Save, X
 } from 'lucide-react';
 
 export default function App() {
@@ -90,6 +90,8 @@ export default function App() {
 
   const handleMouseDownCanvas = (e) => {
     if (e.target === canvasRef.current || e.target.tagName === 'svg' || (e.target.tagName === 'DIV' && e.target.dataset.panningArea)) {
+      // Clear selection when clicking directly on canvas background
+      setSelectedNode(null);
       setIsPanning(true);
       panStartRef.current = { x: e.clientX - panOffset.x, y: e.clientY - panOffset.y };
     }
@@ -123,6 +125,7 @@ export default function App() {
       touchStartDistRef.current = dist;
       touchStartZoomRef.current = zoomLevel;
     } else if (e.touches.length === 1 && (e.target === canvasRef.current || e.target.tagName === 'svg' || e.target.dataset?.panningArea)) {
+      setSelectedNode(null);
       setIsPanning(true);
       panStartRef.current = { x: e.touches[0].clientX - panOffset.x, y: e.touches[0].clientY - panOffset.y };
     }
@@ -210,6 +213,7 @@ export default function App() {
 
   const handleRunSimulation = () => {
     setIsSimulating(true);
+    setSelectedNode(null); // Clear selection on simulation start
     setLogs(prev => [
       { time: new Date().toLocaleTimeString(), level: 'WARN', msg: '🚀 Executing 100,000 Monte Carlo perturbation iterations across NetworkX topology...' },
       ...prev
@@ -235,7 +239,6 @@ export default function App() {
       const randAlert1 = failureTypes[Math.floor(Math.random() * failureTypes.length)];
       const randAlert2 = failureTypes[Math.floor(Math.random() * failureTypes.length)];
 
-      // Increment dynamic anomaly stats counters
       const detectedBatch = Math.floor(Math.random() * 300) + 150;
       setTotalAnomaliesDetected(prev => prev + detectedBatch);
       setFailureTypeStats(prev => ({
@@ -275,6 +278,7 @@ export default function App() {
 
   const handleExecuteCure = () => {
     setSimState('HEALING');
+    setSelectedNode(null); // Clear selection on cure execution
     setLogs(prev => [
       { time: new Date().toLocaleTimeString(), level: 'AI', msg: `🛠️ Deploying Strategy [Option ${selectedOption}] to isolate & repair [${dynamicFailureReport?.primary}, ${dynamicFailureReport?.secondary}]...` },
       ...prev
@@ -447,7 +451,7 @@ export default function App() {
           </div>
         </div>
 
-        {/* Status Telemetry Ribbon (Now Dynamically Updated) */}
+        {/* Status Telemetry Ribbon */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
           <div className={`border rounded-lg p-3.5 flex justify-between items-center shadow-sm transition-colors duration-300 ${
             isDarkMode ? 'bg-[#090d14] border-slate-800' : 'bg-white border-slate-200'
@@ -502,7 +506,7 @@ export default function App() {
               <h2 className={`text-xs font-bold uppercase tracking-widest flex items-center gap-2 ${isDarkMode ? 'text-slate-200' : 'text-slate-800'}`}>
                 <Network className="w-4 h-4 text-emerald-500" /> Stochastic NetworkX Digital Twin (Hold Ctrl + Scroll to Zoom)
               </h2>
-              <p className={`text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Normal page scrolling is unlocked. Use Ctrl+Wheel, pinch gestures, or buttons to zoom.</p>
+              <p className={`text-[11px] ${isDarkMode ? 'text-slate-400' : 'text-slate-500'}`}>Click any node to inspect telemetry. Click canvas background to deselect.</p>
             </div>
             
             {/* Zoom Controls Toolbar */}
@@ -628,7 +632,19 @@ export default function App() {
 
           <div className={`mt-4 pt-3 border-t flex justify-between items-center text-[11px] ${isDarkMode ? 'border-slate-800/80 text-slate-400' : 'border-slate-200 text-slate-600'}`}>
             <span>Total Simulation Runs: <strong className="text-emerald-500">{simulationCount}</strong> | Cumulative Anomalies: <strong className="text-rose-400">{totalAnomaliesDetected}</strong></span>
-            <span>Selected Node: <strong className="text-cyan-400">{selectedNode ? `${selectedNode.label} (${selectedNode.ip})` : 'None'}</strong></span>
+            
+            <div className="flex items-center gap-2">
+              <span>Selected Node: <strong className="text-cyan-400">{selectedNode ? `${selectedNode.label} (${selectedNode.ip})` : 'None'}</strong></span>
+              {selectedNode && (
+                <button 
+                  onClick={() => setSelectedNode(null)} 
+                  className="px-1.5 py-0.5 rounded bg-slate-800 text-slate-300 hover:text-white border border-slate-700 flex items-center gap-1 cursor-pointer text-[10px]"
+                  title="Clear Selection"
+                >
+                  <X className="w-3 h-3" /> Clear
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
