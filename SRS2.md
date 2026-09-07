@@ -111,7 +111,9 @@ The target application topology modeled by the Digital Twin consists of four cor
   "is_attacked": true,
   "failing_node": "cbs-db-primary"
 }
-5.2 Simulation EndpointPOST /api/v1/simulation/startJSON// Payload
+```
+### 5.2 Simulation EndpointPOST /api/v1/simulation/startJSON
+// Payload
 { "permutations": 100000, "chaos_type": "THREADPOOL_LOCK" }
 
 // Response
@@ -121,7 +123,7 @@ The target application topology modeled by the Digital Twin consists of four cor
   "resilience_score": 62.4,
   "vector_drift": "CRITICAL_ANOMALY_DETECTED"
 }
-5.3 Webhook Healing EndpointPOST /api/v1/n8n/triggerJSON// Payload
+### 5.3 Webhook Healing EndpointPOST /api/v1/n8n/triggerJSON// Payload
 {
   "strategy": "ISOLATE_DB_THREADPOOL_WORKER_04",
   "target": "cbs-db-primary",
@@ -134,7 +136,8 @@ The target application topology modeled by the Digital Twin consists of four cor
   "execution_id": "n8n-exec-9921",
   "mttr_seconds": 1.2
 }
-6. Verification & Acceptance CriteriaVisual Contrast: Toggling from baseline state to stress mode visually flips topology nodes from glowing emerald green to pulsing crimson red.Interactive Drill-Down: Clicking cbs-db-primary successfully opens the Sub-Topology drawer displaying write pool exhaustion metrics.Pareto Evaluation: Clicking candidate strategy cards updates the Pareto Frontier chart selection point and calculates risk scores.Closed-Loop Resolution: Executing the auto-patch command fires the webhook log in the real-time terminal and restores all topology nodes back to green state.
+## 6. Verification & Acceptance CriteriaVisual Contrast  
+Toggling from baseline state to stress mode visually flips topology nodes from glowing emerald green to pulsing crimson red.Interactive Drill-Down: Clicking cbs-db-primary successfully opens the Sub-Topology drawer displaying write pool exhaustion metrics.Pareto Evaluation: Clicking candidate strategy cards updates the Pareto Frontier chart selection point and calculates risk scores.Closed-Loop Resolution: Executing the auto-patch command fires the webhook log in the real-time terminal and restores all topology nodes back to green state.
 ---
 
 ## 🔄 End-to-End System Workflow
