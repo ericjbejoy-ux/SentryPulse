@@ -1,1 +1,131 @@
 @import "tailwindcss";
+
+/* ---------- SentryPulse "Quantum Ops" theme tokens ---------- */
+:root, :root[data-theme="dark"] {
+  --sp-bg: #04060f;
+  --sp-surface: #0a0f1f;
+  --sp-surface-2: #070b19;
+  --sp-surface-3: #0c1322;
+  --sp-border: #1f2c4d;
+  --sp-border-bright: #38518a;
+  --sp-cyan: #22d3ee;
+  --sp-violet: #a78bfa;
+  --sp-emerald: #34d399;
+  --sp-amber: #fbbf24;
+  --sp-rose: #fb7185;
+}
+
+body {
+  background: var(--sp-bg);
+}
+
+::selection {
+  background: rgba(52, 211, 153, 0.3);
+}
+
+/* ---------- Animations ---------- */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-fadeIn {
+  animation: fadeIn 0.35s ease-out both;
+}
+
+@keyframes scanline {
+  0% { top: -12%; }
+  100% { top: 112%; }
+}
+.animate-scanline {
+  animation: scanline 7s linear infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% { opacity: 0.55; }
+  50% { opacity: 1; }
+}
+.animate-pulseGlow {
+  animation: pulseGlow 1.7s ease-in-out infinite;
+}
+
+@keyframes gridDrift {
+  from { background-position: 0 0; }
+  to { background-position: 0 48px; }
+}
+.animate-gridDrift {
+  animation: gridDrift 60s linear infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.animate-shimmer {
+  background-size: 200% 100%;
+  animation: shimmer 4s linear infinite;
+}
+
+/* ---------- Gradient text helpers ---------- */
+.text-grad {
+  background: linear-gradient(90deg, #22d3ee 0%, #a78bfa 55%, #34d399 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.text-grad-warm {
+  background: linear-gradient(90deg, #fbbf24 0%, #fb7185 50%, #a78bfa 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ---------- Glow helpers ---------- */
+.glow-cyan   { box-shadow: 0 0 18px -4px rgba(34, 211, 238, 0.55), 0 0 42px -14px rgba(34, 211, 238, 0.4); }
+.glow-violet { box-shadow: 0 0 18px -4px rgba(167, 139, 250, 0.55), 0 0 42px -14px rgba(167, 139, 250, 0.4); }
+.glow-emerald{ box-shadow: 0 0 18px -4px rgba(52, 211, 153, 0.55), 0 0 42px -14px rgba(52, 211, 153, 0.4); }
+.glow-rose   { box-shadow: 0 0 18px -4px rgba(251, 113, 133, 0.55), 0 0 42px -14px rgba(251, 113, 133, 0.4); }
+.glow-amber  { box-shadow: 0 0 18px -4px rgba(251, 191, 36, 0.55), 0 0 42px -14px rgba(251, 191, 36, 0.4); }
+
+.drop-cyan   { filter: drop-shadow(0 0 6px rgba(34, 211, 238, 0.55)); }
+.drop-emerald{ filter: drop-shadow(0 0 6px rgba(52, 211, 153, 0.55)); }
+.drop-amber  { filter: drop-shadow(0 0 6px rgba(251, 191, 36, 0.55)); }
+.drop-rose   { filter: drop-shadow(0 0 6px rgba(251, 113, 133, 0.55)); }
+.drop-violet { filter: drop-shadow(0 0 6px rgba(167, 139, 250, 0.55)); }
+
+/* ---------- CRT scanline overlay (attach to a relative container) ---------- */
+.crt-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.028) 0px,
+    rgba(255, 255, 255, 0.028) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+  mix-blend-mode: overlay;
+}
+
+/* ---------- Scrollbars ---------- */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(56, 81, 138, 0.55) transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(56, 81, 138, 0.5);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(34, 211, 238, 0.55);
+}
