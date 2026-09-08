@@ -27,10 +27,10 @@ export const api = {
   health: () => req('/api/health', { timeoutMs: 4000 }),
   live: () => req('/api/v1/telemetry/live', { timeoutMs: 4000 }),
   nodes: () => req('/api/v1/telemetry/nodes', { timeoutMs: 4000 }),
-  startSimulation: (permutations = 100000, chaos_type = 'THREADPOOL_LOCK') =>
+  startSimulation: (permutations = 100000, chaos_type = 'THREADPOOL_LOCK', dry_run = false) =>
     req('/api/v1/simulation/start', {
       method: 'POST',
-      body: JSON.stringify({ permutations, chaos_type }),
+      body: JSON.stringify({ permutations, chaos_type, dry_run }),
       timeoutMs: 15000,
     }),
   triage: (telemetry, useGroq = true) =>

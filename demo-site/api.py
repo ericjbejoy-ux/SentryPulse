@@ -56,6 +56,15 @@ def balance(acct: str = "alice"):
         return {"ok": False, "error": str(exc)}
 
 
+@app.get("/transactions")
+def transactions():
+    try:
+        with httpx.Client(timeout=5.0) as client:
+            return client.get(f"{DB_URL}/transactions").json()
+    except Exception as exc:
+        return {"transactions": [], "error": str(exc)}
+
+
 @app.post("/transfer")
 def transfer(req: Transfer):
     t0 = time.time()
@@ -67,6 +76,24 @@ def transfer(req: Transfer):
         body = resp.json()
         if not body.get("ok", True) or "error" in body:
             raise RuntimeError(body.get("error", "db rejected debit"))
+        metrics.record(time.time() - t0, False)
+        return {"ok": True, "balance": body.get("balance")}
+    except Exception as exc:
+        metrics.record(time.time() - t0, True)
+        return {"ok": False, "error": str(exc)}
+
+
+@app.post("/credit")
+def credit(req: Transfer):
+    t0 = time.time()
+    try:
+        apply_fault_delay()
+        do_real_work(units=max(1, 8))
+        with httpx.Client(timeout=5.0) as client:
+            resp = client.post(f"{DB_URL}/credit", json=req.model_dump())
+        body = resp.json()
+        if not body.get("ok", True) or "error" in body:
+            raise RuntimeError(body.get("error", "db rejected credit"))
         metrics.record(time.time() - t0, False)
         return {"ok": True, "balance": body.get("balance")}
     except Exception as exc:

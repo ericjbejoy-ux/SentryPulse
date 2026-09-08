@@ -4,6 +4,7 @@ export default function HeaderToolBar({
   isDarkMode, onToggleTheme, simState, isSimulating,
   backendStatus, groqLive, liveSource, apiBase, onRunSimulation, onReset,
   runDisabled = false, runDisabledHint = '', alertActive = false,
+  runLabel, runHint,
 }) {
   const isAttacked = simState === 'ATTACKED' || alertActive;
   const isHealing = simState === 'HEALING';
@@ -54,11 +55,11 @@ export default function HeaderToolBar({
         <button
           onClick={onRunSimulation}
           disabled={isSimulating || isHealing || runDisabled}
-          title={runDisabled ? runDisabledHint : 'Run synthetic 100k Monte Carlo simulation'}
+          title={runDisabled ? runDisabledHint : (runHint || 'Run synthetic 100k Monte Carlo simulation')}
           className="bg-emerald-600 hover:bg-emerald-500 text-slate-950 font-bold px-4 py-2.5 rounded-md flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50 shadow-[0_0_20px_rgba(16,185,129,0.3)] animate-pulse"
         >
           {isSimulating ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Sparkles className="w-4 h-4 fill-current" />}
-          {isSimulating ? 'SIMULATING 100K...' : 'RUN 100K MONTE CARLO TEST'}
+          {isSimulating ? 'SIMULATING 100K...' : (runLabel || 'RUN 100K MONTE CARLO TEST')}
         </button>
 
         <button

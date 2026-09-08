@@ -13,15 +13,25 @@ browser :5173 (SentryPulse)      ◀── twin ◀── adapter polls /metrics
 
 | File | Role |
 | :--- | :--- |
-| `common.py` | Shared rolling metrics + fault state (imported, not run) |
-| `gateway.py` | `:8001` idfc-api-gateway — serves the SentryBank page (`/`), `/status` lights, `/account`; proxies `/pay` → api |
-| `api.py` | `:8002` core-banking-switch — transfer + balance logic → dbsim |
-| `dbsim.py` | `:8003` cbs-db-primary — ledger + bounded write pool |
-| `site.html` | The browsable site: balance, Pay button, 3 status lights (served by gateway) |
-| `supervisor.py` | `:8004` owns the 3 processes; `/restart/{svc}`, `/kill/{svc}` (restart max 1 / 10s) |
-| `loadgen.py` | Traffic generator (`--rps 100 --duration 300`) |
+| `common.py` | Shared rolling metrics (incl. `lat_tail`) + fault state (imported, not run) |
+| `gateway.py` | `:8001` idfc-api-gateway — serves the SentryBank page (`/`), `/status` lights + tails, `/account`, `/transactions`; proxies `/pay` → api; `/demo/reset` reseeds ledger |
+| `api.py` | `:8002` core-banking-switch — transfer + balance + transactions logic → dbsim |
+| `dbsim.py` | `:8003` cbs-db-primary — ledger (overdraft-proof) + tx journal + bounded write pool |
+| `site.html` | The browsable site: alice+bob balances, Pay amount, Reset demo, lights + sparklines, tx table (served by gateway) |
+| `supervisor.py` | `:8004` owns the 3 processes; `/restart/{svc}`, `/kill/{svc}` (restart max 1 / 10s); reaps stale squatters at startup |
+| `loadgen.py` | Traffic generator (`--rps 100 --duration 300`); spends from the inexhaustible `faucet` account |
 | `faults.py` | Fault CLI: `latency`, `deadlock`, `kill`, `clear`, `status` (kill routes via supervisor) |
 | `run.sh` | Starts the 3 services directly (no supervisor, no auto-heal) |
+| `stop.sh` | Stops the whole demo stack by port (`./stop.sh [ports...]`, default 8000–8004) |
+
+## Ledger rules
+
+- Balances seed: alice ₹10,000 / bob ₹5,000 / faucet ₹1e9 (`SEED_BALANCES`).
+- Overdrafts are **rejected** (`insufficient funds`), never applied — balance can't go negative.
+- Top-ups credit through the full chain (`POST /topup` → api `/credit` → db), honoring pool + faults; journaled as `credit`.
+- `POST /demo/reset` (gateway) reseeds + clears the tx journal. Supervisor restarts reset implicitly (in-memory).
+- Last 15 debits journaled (faucet traffic excluded, so human txs stay visible); `GET /transactions` down the chain.
+- SentryPulse cure path is unaffected (heal restarts processes, ledger persists in the survivors).
 
 Setup: `pip install -r requirements.txt` (own venv recommended).
 Linux only (SIGKILL fault + psutil port lookup).
@@ -30,7 +40,7 @@ Linux only (SIGKILL fault + psutil port lookup).
 
 ```bash
 # T1  victim + supervisor
-python supervisor.py
+python3 demo-site/supervisor.py
 # T2  traffic (ALWAYS 100 rps — calibration baseline, see below)
 python loadgen.py --rps 100 --duration 300
 # T3  SentryPulse in live mode
@@ -48,10 +58,10 @@ balance moves. Inject `Deadlock` on db from the Crash-bar → site tab
 shows db red + Pay fails with the real `write pool exhausted` error →
 control room auto-triages (Groq diagnosis appears, no clicks) and the
 Pareto panel arms itself → one EXECUTE CURE heals **all** failing nodes
-(PIDs change) → both tabs green, no refresh, no RUN needed. (RUN 100K is
-disabled in live mode — it's the synthetic path.) Killing the gateway
-kills the page itself: the tab shows an unreachable banner instead of
-frozen greens. `python faults.py` remains as a CLI fallback.
+(PIDs change) → both tabs green, no refresh, no RUN needed. (In live
+mode RUN 100K becomes FORECAST: dry-run numbers, twin untouched.)
+Killing the gateway kills the page itself: the tab shows an unreachable
+banner instead of frozen greens. `python faults.py` remains as a CLI fallback.
 
 `upi-settlement-cache` has no victim process and keeps synthetic data;
 everything else on the canvas is measured.
@@ -79,8 +89,12 @@ or hardware class.
 
 ## E2E checklist (verified 2026-09-08, two-tab flow)
 
-- [ ] `:8001/` shows balance + working Pay + 3 green lights, zero SentryPulse running
-- [ ] UI shows 3-node live graph with real PIDs + ☠️ Crash-test bar, RUN disabled (synthetic mode: 8 nodes, RUN enabled, no bar)
+- [ ] `:8001/` shows balance + working Pay (custom amount) + Reset demo + 3 green lights with sparklines + tx table, zero SentryPulse running
+- [ ] Overdraft Pay (₹99,999) → `insufficient funds`, balance unchanged; Reset demo → ₹10,000 + empty history
+- [ ] Top up bob ₹250 → balance ₹5,250, journaled as `credit`; Bob tile + tx pills render on the page
+- [ ] Loadgen 5 min → alice untouched (faucet absorbs traffic)
+- [ ] FORECAST button in live mode → numbers logged + forecast card, twin/PIDs untouched; synthetic RUN unchanged
+- [ ] UI shows 3-node live graph with real PIDs + ☠️ Crash-test bar, RUN relabeled FORECAST (synthetic mode: 8 nodes, RUN enabled, no bar)
 - [ ] Crash-bar `Latency` on api → api+gateway CRITICAL ≤3 polls **with red edges/arrows**, db untouched
 - [ ] Dead node cards show `DOWN — process unreachable`; erroring nodes show `SLO BREACH`; cascade shows `CASCADE RISK`
 - [ ] Site tab during fault: degraded/red light + Pay slow or failing with the real error
@@ -90,4 +104,4 @@ or hardware class.
 - [ ] Kill all 3 → single cure heals all (PIDs change), all NOMINAL ≤20s, site green + Pay works, no refresh
 - [ ] Backend flipped to live mode after tab load → live graph appears ≤12s, no refresh; backend killed → static fallback, no frozen frame
 - [ ] `Clear all` resets victim faults; `DEMO_SITE_URL` unset → synthetic mode, `pytest tests/` green
-- [ ] Troubleshooting: stale squatters on :8001–8004 (old supervisors) → kill listeners by port, never `pkill -f` self-matching patterns
+- [ ] Troubleshooting: `./stop.sh` kills the stack by port; the supervisor also reaps stale squatters at startup. Never `pkill -f` self-matching patterns

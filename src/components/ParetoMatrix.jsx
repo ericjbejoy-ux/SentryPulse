@@ -8,7 +8,7 @@ import {
 export default function ParetoMatrix({
   simState, selectedOption, onSelectOption, dynamicFailureReport,
   triageReport, isDarkMode, onExecuteCure,
-  liveActive = false, incidentTargets = [],
+  liveActive = false, incidentTargets = [], forecast = null,
 }) {
   const isAttacked = simState === 'ATTACKED';
   const isHealing = simState === 'HEALING';
@@ -32,8 +32,19 @@ export default function ParetoMatrix({
           </span>
         </div>
 
+        {forecast && (
+          <div className={`mt-3 p-4 rounded-lg border text-[11px] leading-relaxed ${
+            isDarkMode ? 'bg-cyan-950/30 border-cyan-500/30 text-cyan-100' : 'bg-cyan-50 border-cyan-200 text-cyan-900'
+          }`}>
+            <span className="font-bold">🔮 Forecast ({forecast.at}):</span>{' '}
+            resilience <strong>{forecast.resilience_score}%</strong> over{' '}
+            {forecast.permutations_executed.toLocaleString()} permutations in{' '}
+            {forecast.duration_seconds}s → {forecast.vector_drift}. Twin untouched.
+          </div>
+        )}
+
         {active ? (
-          <div className="space-y-3">
+          <div className="space-y-3 mt-3">
             {triageReport?.groq_diagnosis?.root_cause && (
               <div className={`p-3 rounded-lg border text-[11px] leading-relaxed ${
                 isDarkMode ? 'bg-purple-950/30 border-purple-500/30 text-purple-200' : 'bg-purple-50 border-purple-200 text-purple-900'
@@ -82,6 +93,7 @@ export default function ParetoMatrix({
             </div>
           </div>
         ) : (
+          <div className="space-y-3 mt-3">
           <div className={`h-44 flex flex-col items-center justify-center border border-dashed rounded-lg text-center p-6 ${
             isDarkMode ? 'border-slate-800 bg-[#04060a]/50 text-slate-400' : 'border-slate-200 bg-slate-50 text-slate-500'
           }`}>
@@ -90,6 +102,7 @@ export default function ParetoMatrix({
             </div>
             <p className={`text-xs font-bold mb-1 ${isDarkMode ? 'text-slate-300' : 'text-slate-800'}`}>100k Monte Carlo Simulation Standby</p>
             <p className="text-[11px] text-slate-500">Run the stress test to aggregate Monte Carlo permutations and output dynamic failure statistics.</p>
+          </div>
           </div>
         )}
       </div>

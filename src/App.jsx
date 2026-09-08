@@ -215,9 +215,34 @@ export default function App() {
   };
 
   // Backend-first simulation: unified API (Groq-live triage) with local fallback.
+  // In live-site mode this is a DRY-RUN forecast: numbers only, twin untouched.
+  const [forecast, setForecast] = useState(null);
   const handleRunSimulation = async () => {
     setIsSimulating(true);
     setSelectedNode(null);
+    if (liveMode) {
+      setForecast(null);
+      setLogs((prev) => [
+        { time: new Date().toLocaleTimeString(), level: 'WARN', msg: `🔮 Forecasting 100,000 Monte Carlo iterations (dry run — live twin untouched)...` },
+        ...prev
+      ]);
+      try {
+        const sim = await api.startSimulation(100000, 'THREADPOOL_LOCK', true);
+        setIsSimulating(false);
+        setForecast({ ...sim, at: new Date().toLocaleTimeString() });
+        setLogs((prev) => [
+          { time: new Date().toLocaleTimeString(), level: 'SYS', msg: `🔮 Forecast: resilience ${sim.resilience_score}% over ${sim.permutations_executed.toLocaleString()} permutations in ${sim.duration_seconds}s → ${sim.vector_drift}. No chaos injected.` },
+          ...prev
+        ]);
+      } catch (err) {
+        setIsSimulating(false);
+        setLogs((prev) => [
+          { time: new Date().toLocaleTimeString(), level: 'WARN', msg: `⚠️ Forecast failed (${err.message}).` },
+          ...prev
+        ]);
+      }
+      return;
+    }
     setLogs((prev) => [
       { time: new Date().toLocaleTimeString(), level: 'WARN', msg: `🚀 Requesting 100,000 Monte Carlo iterations from unified backend...` },
       ...prev
@@ -339,6 +364,7 @@ export default function App() {
   const handleReset = () => {
     setSimState('NOMINAL');
     setSelectedNode(null);
+    setForecast(null);
     setDynamicFailureReport(null);
     setTriageReport(null);
     setNodes(initialNodes);
@@ -415,8 +441,8 @@ export default function App() {
         apiBase={API_BASE}
         onRunSimulation={handleRunSimulation}
         onReset={handleReset}
-        runDisabled={liveMode}
-        runDisabledHint="Live-site mode: break things with the Crash-test bar, not synthetic sim"
+        runLabel={liveMode ? 'FORECAST 100K MONTE CARLO' : undefined}
+        runHint={liveMode ? 'Dry run: forecasts resilience without touching the live twin' : undefined}
       />
 
       <main className="flex-1 p-6 space-y-6 max-w-[1700px] w-full mx-auto">
@@ -456,6 +482,7 @@ export default function App() {
             onExecuteCure={handleExecuteCure}
             liveActive={liveMode && liveIncident.length > 0}
             incidentTargets={incidentTargets}
+            forecast={liveMode ? forecast : null}
           />
           <TerminalDrawer
             logs={logs}

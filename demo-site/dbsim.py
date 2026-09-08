@@ -5,7 +5,9 @@ so real debits queue up / time out exactly like a threadpool exhaustion.
 """
 import threading
 import time
-from typing import Dict
+from collections import deque
+from datetime import datetime, timezone
+from typing import Deque, Dict
 
 from fastapi import FastAPI
 from pydantic import BaseModel
@@ -14,11 +16,28 @@ from common import Metrics, apply_fault_delay, current_fault, do_real_work, faul
 
 app = FastAPI(title="demo-site dbsim (cbs-db-primary)")
 metrics = Metrics()
-ledger: Dict[str, float] = {"alice": 10000.0, "bob": 5000.0}
+
+SEED_BALANCES: Dict[str, float] = {"alice": 10000.0, "bob": 5000.0, "faucet": 1e9}
+ledger: Dict[str, float] = dict(SEED_BALANCES)
 ledger_lock = threading.Lock()
+
+# Recent debits for the site table (newest last, capped). Loadgen noise
+# is excluded: the faucet account never appears, so human alice/bob
+# transactions stay visible under 100 RPS traffic.
+tx_history: Deque[Dict[str, object]] = deque(maxlen=15)
+JOURNAL_SKIP = {"faucet"}
+
+
+def _journal(entry: Dict[str, object]) -> None:
+    if entry.get("acct") not in JOURNAL_SKIP:
+        tx_history.append(entry)
 
 WRITE_POOL_SIZE = 8
 write_pool = threading.Semaphore(WRITE_POOL_SIZE)
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).strftime("%H:%M:%S")
 
 
 class Debit(BaseModel):
@@ -78,8 +97,14 @@ def debit(req: Debit):
         apply_fault_delay()
         do_real_work()
         with ledger_lock:
-            ledger[req.acct] = ledger.get(req.acct, 0.0) - req.amount
+            current = ledger.get(req.acct, 0.0)
+            if current < req.amount:
+                metrics.record(time.time() - t0, True)
+                _journal({"time": _now(), "acct": req.acct, "amount": req.amount, "ok": False, "kind": "debit", "error": "insufficient funds"})
+                return {"error": "insufficient funds", "ok": False}
+            ledger[req.acct] = current - req.amount
             value = ledger[req.acct]
+            _journal({"time": _now(), "acct": req.acct, "amount": req.amount, "ok": True, "kind": "debit"})
         metrics.record(time.time() - t0, False)
         return {"ok": True, "acct": req.acct, "balance": value}
     except Exception as exc:
@@ -87,6 +112,57 @@ def debit(req: Debit):
         return {"error": str(exc), "ok": False}
     finally:
         write_pool.release()
+
+
+@app.get("/transactions")
+def transactions():
+    with ledger_lock:
+        return {"transactions": list(tx_history)}
+
+
+class Credit(BaseModel):
+    acct: str = "alice"
+    amount: float = 100.0
+
+
+@app.post("/credit")
+def credit(req: Credit):
+    """Top up an account (demo button + tests). Honors pool + faults."""
+    t0 = time.time()
+    if fault.snapshot()["deadlock"]:
+        metrics.record(time.time() - t0, True)
+        return {"error": "write pool exhausted (deadlock)", "ok": False}
+    acquired = write_pool.acquire(timeout=2.0)
+    if not acquired:
+        metrics.record(time.time() - t0, True)
+        return {"error": "write pool timeout", "ok": False}
+    try:
+        apply_fault_delay()
+        do_real_work()
+        if req.amount <= 0:
+            metrics.record(time.time() - t0, True)
+            return {"error": "amount must be positive", "ok": False}
+        with ledger_lock:
+            ledger[req.acct] = ledger.get(req.acct, 0.0) + req.amount
+            value = ledger[req.acct]
+            _journal({"time": _now(), "acct": req.acct, "amount": req.amount, "ok": True, "kind": "credit"})
+        metrics.record(time.time() - t0, False)
+        return {"ok": True, "acct": req.acct, "balance": value}
+    except Exception as exc:
+        metrics.record(time.time() - t0, True)
+        return {"error": str(exc), "ok": False}
+    finally:
+        write_pool.release()
+
+
+@app.post("/ledger/reset")
+def reset_ledger():
+    with ledger_lock:
+        ledger.clear()
+        ledger.update(SEED_BALANCES)
+        tx_history.clear()
+        balances = dict(ledger)
+    return {"ok": True, "balances": balances}
 
 
 @app.post("/fault")

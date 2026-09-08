@@ -17,7 +17,8 @@ async def worker(url: str, interval: float, stop_at: float, stats: dict) -> None
         while time.time() < stop_at:
             t0 = time.time()
             try:
-                r = await client.post(url, json={"acct": "alice", "amount": 1.0})
+                # Faucet account: inexhaustible, never starves alice/bob.
+                r = await client.post(url, json={"acct": "faucet", "amount": 1.0})
                 ok = r.json().get("ok", False)
             except Exception:
                 ok = False

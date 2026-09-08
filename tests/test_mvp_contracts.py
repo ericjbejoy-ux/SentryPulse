@@ -41,6 +41,18 @@ def test_simulation_injects_chaos_and_reset_clears_it():
     assert client.get("/api/v1/telemetry/live").json()["is_attacked"] is False
 
 
+def test_simulation_dry_run_injects_nothing():
+    client.post("/api/v1/telemetry/reset")
+    sim = client.post(
+        "/api/v1/simulation/start",
+        json={"permutations": 2000, "chaos_type": "THREADPOOL_LOCK", "dry_run": True},
+    )
+    assert sim.status_code == 200
+    assert sim.json()["status"] == "COMPLETED"
+    live = client.get("/api/v1/telemetry/live").json()
+    assert live["is_attacked"] is False  # forecast only: twin untouched
+
+
 def test_triage_rules_only_and_pareto_options():
     tri = client.post("/api/v1/triage?use_groq=false", json={})
     assert tri.status_code == 200

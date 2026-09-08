@@ -106,6 +106,7 @@ class Metrics:
             "cpu_pct": cpu_pct,
             "rps": int(round(rps)),
             "error_rate": error_rate,
+            "lat_tail": [round(v, 1) for v in list(self._latencies)[-20:]],
         }
 
 

@@ -184,7 +184,7 @@ async def start_simulation(req: SimulationRequest) -> SimulationResult:
     from backend.telemetry.simulation import run_simulation
 
     result = run_simulation(req)
-    if result.vector_drift != "NOMINAL":
+    if result.vector_drift != "NOMINAL" and not req.dry_run:
         twin_state.inject_chaos(TopologyNodeId.CBS_DB_PRIMARY)
     return result
 

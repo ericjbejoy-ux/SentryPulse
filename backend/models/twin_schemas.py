@@ -50,6 +50,9 @@ class SimulationRequest(BaseModel):
 
     permutations: int = Field(default=100_000, le=200_000, gt=0)
     chaos_type: str = "THREADPOOL_LOCK"
+    # dry_run=true returns the forecast WITHOUT injecting chaos into the
+    # live twin. Used by the UI's forecast button in demo-site mode.
+    dry_run: bool = False
 
 
 class SimulationResult(BaseModel):

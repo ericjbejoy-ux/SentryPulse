@@ -50,6 +50,26 @@ def pid_on_port(port: int):
     return None
 
 
+def reap_stale(port: int) -> None:
+    """Terminate a stale squatter on a victim port.
+
+    At supervisor startup we own no children yet, so ANY listener on our
+    ports is leftover from a previous generation — kill it so a fresh
+    spawn can bind. Without this, the supervisor silently adopts strays
+    (spawn skipped, restarts fail) and every layer above misbehaves.
+    """
+    pid = pid_on_port(port)
+    if pid is None:
+        return
+    try:
+        proc = psutil.Process(pid)
+        proc.terminate()
+        proc.wait(timeout=5)
+        print(f"[supervisor] reaped stale pid {pid} on :{port}")
+    except (psutil.NoSuchProcess, psutil.TimeoutExpired) as exc:
+        print(f"[supervisor] WARNING: could not reap pid {pid} on :{port} ({exc})")
+
+
 @app.get("/status")
 def status():
     out = {}
@@ -106,10 +126,10 @@ if __name__ == "__main__":
     import uvicorn
 
     for svc in SERVICES:
-        # Don't double-spawn if something already answers on the port.
+        reap_stale(SERVICES[svc]["port"])
         if pid_on_port(SERVICES[svc]["port"]) is None:
             spawn(svc)
             print(f"[supervisor] started {svc} on :{SERVICES[svc]['port']}")
         else:
-            print(f"[supervisor] :{SERVICES[svc]['port']} already in use, {svc} not spawned")
+            print(f"[supervisor] :{SERVICES[svc]['port']} still occupied, {svc} not spawned")
     uvicorn.run(app, host="127.0.0.1", port=8004, log_level="warning")
